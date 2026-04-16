@@ -52,11 +52,18 @@ var modelCatalog = []modelCatalogEntry{
 		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
 	},
 	{
-		Name:         "Tripo v3.1 (Latest)",
+		Name:         "Tripo v3.1",
 		ID:           "v3.1",
 		APIVersion:   "v3.1-20260211",
-		Description:  "Latest model with best overall quality.",
+		Description:  "Best overall quality for general-purpose generation.",
 		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
+	},
+	{
+		Name:         "Tripo P1.0 (Smart Mesh)",
+		ID:           "p1",
+		APIVersion:   "P1-20260311",
+		Description:  "Smart lowpoly generation. Clean topology in ~2 seconds, 48-20K faces, game-engine ready. Ideal for Unity/Unreal/Godot.",
+		Capabilities: []string{"text_to_3d", "image_to_3d"},
 	},
 }
 
