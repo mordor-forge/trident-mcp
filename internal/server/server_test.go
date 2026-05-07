@@ -139,6 +139,7 @@ func TestNew_CreatesServer(t *testing.T) {
 	srv := New(&mockGenerator{}, &mockStatus{}, &mockPostProc{}, nil, t.TempDir())
 	if srv == nil {
 		t.Fatal("New returned nil")
+		return
 	}
 	if srv.mcp == nil {
 		t.Fatal("underlying MCP server is nil")
@@ -663,7 +664,7 @@ func TestListModels_Success(t *testing.T) {
 		t.Fatal("expected success, got error result")
 	}
 
-	assertContentContains(t, res, "Available Models")
+	assertContentContains(t, res, "Built-in Model Catalog")
 	assertContentContains(t, res, "Tripo v3.1")
 	assertContentContains(t, res, "Latest model")
 }

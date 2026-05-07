@@ -1,23 +1,52 @@
 ---
 name: 3d-to-blender
-description: Import 3D models into Blender via blender-mcp and set up scenes. Use when the user wants to import a generated 3D model into Blender, set up a scene, adjust materials, configure rendering, or do any Blender-related work with a trident-mcp generated model. Triggers on "import to Blender", "send to Blender", "open in Blender", "set up Blender scene", "render this model".
+description: Import 3D models into Blender and set up scenes. Prefer the official Blender connector / Blender Lab MCP server when available, and fall back to the community blender-mcp server if needed. Use when the user wants to import a generated 3D model into Blender, set up a scene, adjust materials, configure rendering, or do any Blender-related work with a trident-mcp generated model. Triggers on "import to Blender", "send to Blender", "open in Blender", "set up Blender scene", "render this model".
 ---
 
 # 3D to Blender Skill
 
-You are an expert at importing 3D models into Blender and setting up professional scenes. This skill uses **blender-mcp** (ahujasid/blender-mcp) to control Blender programmatically after a model has been generated with trident-mcp.
+You are an expert at importing 3D models into Blender and setting up professional scenes. This skill should use the best available Blender connector after a model has been generated with trident-mcp.
 
 ## Prerequisites
 
-This skill requires **blender-mcp** to be configured and connected to a running Blender instance with the blender-mcp addon enabled.
+This skill requires a Blender MCP server to be configured and connected to a running Blender instance.
 
-Before starting, verify the connection by checking for blender-mcp tools (like `get_scene_info` or `execute_blender_code`). If not available, guide the user:
+Before starting, detect which Blender backend is available.
 
-> "Blender MCP is not connected. To set it up:
-> 1. Open Blender
-> 2. Install the blender-mcp addon (Edit > Preferences > Add-ons)
-> 3. Enable it and click 'Connect' in the addon panel
-> 4. Make sure blender-mcp is configured in your Claude Code MCP settings"
+### Preferred backend: official Blender connector / Blender Lab MCP
+
+Treat the official connector as available when tools like these are present:
+
+- `execute_blender_code`
+- `get_objects_summary`
+- `get_blendfile_summary_datablocks`
+- `get_screenshot_of_window_as_image`
+- `render_viewport_to_path`
+
+If both the official connector and the community server are present, always prefer the official connector.
+
+### Fallback backend: community `blender-mcp`
+
+Treat the community backend as available when tools like these are present:
+
+- `execute_blender_code`
+- `get_scene_info`
+- `get_viewport_screenshot`
+
+### If no Blender backend is available
+
+Guide the user toward the official connector first:
+
+> "Blender is not connected. Preferred setup is the official Blender connector:
+> 1. Open Blender 5.1+
+> 2. Install the Blender Lab MCP add-on
+> 3. In the add-on preferences, confirm host `localhost` and port `9876`
+> 4. Start or enable auto-start for the MCP bridge server
+> 5. Make sure the official Blender MCP server is configured in Claude Code
+>
+> Note: in the official add-on, the controls live in the add-on preferences, not the N panel.
+>
+> If you already use the community `blender-mcp`, that can still work as a fallback." 
 
 ## Workflow
 
@@ -31,7 +60,7 @@ Identify which model to import:
 
 ### Phase 2: Import Model
 
-Use `execute_blender_code` to run the appropriate Blender import operator:
+Use `execute_blender_code` to run the appropriate Blender import operator. This tool is available in both the official connector and the community backend, so it is the safest import path.
 
 **GLTF/GLB:**
 ```python
@@ -120,7 +149,12 @@ plane.data.materials.append(mat)
 
 ### Phase 4: Verify
 
-Use `get_viewport_screenshot` to capture and show the user the current state of the scene.
+Verify using the best available inspection tool for the active backend:
+
+- Official connector: prefer `get_screenshot_of_window_as_image` for a fast UI snapshot, and `render_viewport_to_path` when the user wants a cleaner viewport render.
+- Community backend: use `get_viewport_screenshot`.
+
+If screenshot tools are unavailable but Blender summary tools are available, use `get_objects_summary` or `get_blendfile_summary_datablocks` to sanity-check that the import succeeded.
 
 ### Phase 5: Interactive Review
 
@@ -134,6 +168,8 @@ Use `get_viewport_screenshot` to capture and show the user the current state of 
 
 ## Tips
 
+- Prefer the official Blender connector when both backends are available.
+- When not troubleshooting, refer to the active backend generically as the "Blender connector" rather than naming the MCP implementation.
 - Always import at origin and reset transforms for clean scene setup
 - Use EEVEE for quick previews, Cycles for final renders
 - The three-point lighting setup works well for most product-style renders

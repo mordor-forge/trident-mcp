@@ -84,7 +84,7 @@ After the model is generated:
 > 2. **Convert format** — Export to FBX, OBJ, STL, USDZ, or 3MF
 > 3. **Stylize** — Apply LEGO, voxel, Voronoi, or Minecraft style
 > 4. **New variation** — Same concept, different take
-> 5. **Send to Blender** — Import via blender-mcp (use the 3d-to-blender skill)
+> 5. **Send to Blender** — Import via the preferred Blender connector (official first, community fallback; use the 3d-to-blender skill)
 > 6. **Done** — Keep this model
 
 ## Post-Processing Details

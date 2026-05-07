@@ -120,7 +120,7 @@ func TestListModels(t *testing.T) {
 		t.Fatal("expected at least one model")
 	}
 
-	// Check that v3.1 is present.
+	// Check that the latest H3 entry is present.
 	found := false
 	for _, m := range models {
 		if m.ID == "v3.1" {
@@ -130,6 +130,24 @@ func TestListModels(t *testing.T) {
 	}
 	if !found {
 		t.Error("v3.1 model not found in list")
+	}
+
+	// Check that P1 advertises multiview support.
+	found = false
+	for _, m := range models {
+		if m.ID != "p1" {
+			continue
+		}
+		found = true
+		if len(m.Capabilities) != 3 {
+			t.Fatalf("p1 capabilities = %v, want text/image/multiview", m.Capabilities)
+		}
+		if got := strings.Join(m.Capabilities, ","); !strings.Contains(got, "multiview_to_3d") {
+			t.Errorf("p1 capabilities = %v, want multiview_to_3d", m.Capabilities)
+		}
+	}
+	if !found {
+		t.Error("p1 model not found in list")
 	}
 }
 

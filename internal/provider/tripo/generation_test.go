@@ -63,7 +63,22 @@ func TestTextToModel_WithOptions(t *testing.T) {
 	})
 
 	p := newTestProvider(t, handler)
-	_, err := p.TextToModel(context.Background(), TextToModelReqFull("A sword", "blurry", "v2.5", 5000))
+	_, err := p.TextToModel(context.Background(), provider.TextToModelRequest{
+		Prompt:          "A sword",
+		NegativePrompt:  "blurry",
+		ModelVersion:    "v3.1",
+		FaceLimit:       5000,
+		Texture:         boolPtr(false),
+		PBR:             boolPtr(true),
+		ImageSeed:       intPtr(11),
+		ModelSeed:       intPtr(22),
+		TextureSeed:     intPtr(33),
+		TextureQuality:  "detailed",
+		AutoSize:        boolPtr(true),
+		Compress:        "geometry",
+		ExportUV:        boolPtr(false),
+		GeometryQuality: "detailed",
+	})
 	if err != nil {
 		t.Fatalf("TextToModel: %v", err)
 	}
@@ -71,11 +86,41 @@ func TestTextToModel_WithOptions(t *testing.T) {
 	if captured["negative_prompt"] != "blurry" {
 		t.Errorf("negative_prompt = %v, want 'blurry'", captured["negative_prompt"])
 	}
-	if captured["model_version"] != "v2.5-20250123" {
-		t.Errorf("model_version = %v, want 'v2.5-20250123'", captured["model_version"])
+	if captured["model_version"] != "v3.1-20260211" {
+		t.Errorf("model_version = %v, want 'v3.1-20260211'", captured["model_version"])
 	}
 	if captured["face_limit"] != float64(5000) {
 		t.Errorf("face_limit = %v, want 5000", captured["face_limit"])
+	}
+	if captured["texture"] != false {
+		t.Errorf("texture = %v, want false", captured["texture"])
+	}
+	if captured["pbr"] != true {
+		t.Errorf("pbr = %v, want true", captured["pbr"])
+	}
+	if captured["image_seed"] != float64(11) {
+		t.Errorf("image_seed = %v, want 11", captured["image_seed"])
+	}
+	if captured["model_seed"] != float64(22) {
+		t.Errorf("model_seed = %v, want 22", captured["model_seed"])
+	}
+	if captured["texture_seed"] != float64(33) {
+		t.Errorf("texture_seed = %v, want 33", captured["texture_seed"])
+	}
+	if captured["texture_quality"] != "detailed" {
+		t.Errorf("texture_quality = %v, want detailed", captured["texture_quality"])
+	}
+	if captured["auto_size"] != true {
+		t.Errorf("auto_size = %v, want true", captured["auto_size"])
+	}
+	if captured["compress"] != "geometry" {
+		t.Errorf("compress = %v, want geometry", captured["compress"])
+	}
+	if captured["export_uv"] != false {
+		t.Errorf("export_uv = %v, want false", captured["export_uv"])
+	}
+	if captured["geometry_quality"] != "detailed" {
+		t.Errorf("geometry_quality = %v, want detailed", captured["geometry_quality"])
 	}
 }
 
@@ -189,6 +234,79 @@ func TestImageToModel_WithUpload(t *testing.T) {
 	}
 }
 
+func TestImageToModel_WithAdvancedOptions(t *testing.T) {
+	var captured map[string]any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &captured)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"task_id": "img-task-opts"},
+		})
+	})
+
+	p := newTestProvider(t, handler)
+	_, err := p.ImageToModel(context.Background(), provider.ImageToModelRequest{
+		ImageURL:           "https://example.com/photo.jpg",
+		ModelVersion:       "p1",
+		FaceLimit:          4000,
+		Texture:            boolPtr(false),
+		PBR:                boolPtr(true),
+		ModelSeed:          intPtr(42),
+		TextureSeed:        intPtr(99),
+		TextureQuality:     "detailed",
+		TextureAlignment:   "geometry",
+		EnableImageAutofix: boolPtr(true),
+		AutoSize:           boolPtr(true),
+		Orientation:        "align_image",
+		Compress:           "geometry",
+		ExportUV:           boolPtr(false),
+	})
+	if err != nil {
+		t.Fatalf("ImageToModel: %v", err)
+	}
+
+	if captured["model_version"] != "P1-20260311" {
+		t.Errorf("model_version = %v, want P1-20260311", captured["model_version"])
+	}
+	if captured["face_limit"] != float64(4000) {
+		t.Errorf("face_limit = %v, want 4000", captured["face_limit"])
+	}
+	if captured["texture"] != false {
+		t.Errorf("texture = %v, want false", captured["texture"])
+	}
+	if captured["pbr"] != true {
+		t.Errorf("pbr = %v, want true", captured["pbr"])
+	}
+	if captured["model_seed"] != float64(42) {
+		t.Errorf("model_seed = %v, want 42", captured["model_seed"])
+	}
+	if captured["texture_seed"] != float64(99) {
+		t.Errorf("texture_seed = %v, want 99", captured["texture_seed"])
+	}
+	if captured["texture_quality"] != "detailed" {
+		t.Errorf("texture_quality = %v, want detailed", captured["texture_quality"])
+	}
+	if captured["texture_alignment"] != "geometry" {
+		t.Errorf("texture_alignment = %v, want geometry", captured["texture_alignment"])
+	}
+	if captured["enable_image_autofix"] != true {
+		t.Errorf("enable_image_autofix = %v, want true", captured["enable_image_autofix"])
+	}
+	if captured["auto_size"] != true {
+		t.Errorf("auto_size = %v, want true", captured["auto_size"])
+	}
+	if captured["orientation"] != "align_image" {
+		t.Errorf("orientation = %v, want align_image", captured["orientation"])
+	}
+	if captured["compress"] != "geometry" {
+		t.Errorf("compress = %v, want geometry", captured["compress"])
+	}
+	if captured["export_uv"] != false {
+		t.Errorf("export_uv = %v, want false", captured["export_uv"])
+	}
+}
+
 func TestImageToModel_MissingInput(t *testing.T) {
 	p, _ := New(Config{APIKey: "tsk_test"})
 	_, err := p.ImageToModel(context.Background(), ImageToModelReqURL(""))
@@ -226,11 +344,14 @@ func TestMultiviewToModel_WithURLs(t *testing.T) {
 		t.Errorf("type = %v", captured["type"])
 	}
 	files := captured["files"].([]any)
-	if len(files) != 3 {
-		t.Errorf("files count = %d, want 3", len(files))
+	if len(files) != 4 {
+		t.Errorf("files count = %d, want 4", len(files))
 	}
 	if files[1].(map[string]any)["type"] != "jpg" {
 		t.Errorf("files[1].type = %v, want jpg", files[1].(map[string]any)["type"])
+	}
+	if len(files[3].(map[string]any)) != 0 {
+		t.Errorf("files[3] = %v, want empty placeholder", files[3])
 	}
 }
 
@@ -260,6 +381,103 @@ func TestMultiviewToModel_WithURLsPreservesFileTypes(t *testing.T) {
 	}
 	if files[1].(map[string]any)["type"] != "webp" {
 		t.Errorf("files[1].type = %v, want webp", files[1].(map[string]any)["type"])
+	}
+	if len(files) != 4 {
+		t.Errorf("files count = %d, want 4", len(files))
+	}
+}
+
+func TestMultiviewToModel_WithP1AndAdvancedOptions(t *testing.T) {
+	var captured map[string]any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &captured)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"task_id": "mv-task-p1"},
+		})
+	})
+
+	p := newTestProvider(t, handler)
+	_, err := p.MultiviewToModel(context.Background(), provider.MultiviewToModelRequest{
+		ImageURLs: []string{
+			"https://example.com/front.png",
+			"https://example.com/left.webp",
+			"https://example.com/back.jpg",
+		},
+		ModelVersion:       "p1",
+		FaceLimit:          6000,
+		Texture:            boolPtr(false),
+		PBR:                boolPtr(true),
+		ModelSeed:          intPtr(7),
+		TextureSeed:        intPtr(8),
+		TextureQuality:     "detailed",
+		TextureAlignment:   "geometry",
+		EnableImageAutofix: boolPtr(true),
+		AutoSize:           boolPtr(true),
+		Orientation:        "align_image",
+		Compress:           "geometry",
+		ExportUV:           boolPtr(false),
+	})
+	if err != nil {
+		t.Fatalf("MultiviewToModel: %v", err)
+	}
+
+	if captured["model_version"] != "P1-20260311" {
+		t.Errorf("model_version = %v, want P1-20260311", captured["model_version"])
+	}
+	if captured["face_limit"] != float64(6000) {
+		t.Errorf("face_limit = %v, want 6000", captured["face_limit"])
+	}
+	if captured["texture"] != false {
+		t.Errorf("texture = %v, want false", captured["texture"])
+	}
+	if captured["pbr"] != true {
+		t.Errorf("pbr = %v, want true", captured["pbr"])
+	}
+	if captured["model_seed"] != float64(7) {
+		t.Errorf("model_seed = %v, want 7", captured["model_seed"])
+	}
+	if captured["texture_seed"] != float64(8) {
+		t.Errorf("texture_seed = %v, want 8", captured["texture_seed"])
+	}
+	if captured["texture_quality"] != "detailed" {
+		t.Errorf("texture_quality = %v, want detailed", captured["texture_quality"])
+	}
+	if captured["texture_alignment"] != "geometry" {
+		t.Errorf("texture_alignment = %v, want geometry", captured["texture_alignment"])
+	}
+	if captured["enable_image_autofix"] != true {
+		t.Errorf("enable_image_autofix = %v, want true", captured["enable_image_autofix"])
+	}
+	if captured["auto_size"] != true {
+		t.Errorf("auto_size = %v, want true", captured["auto_size"])
+	}
+	if captured["orientation"] != "align_image" {
+		t.Errorf("orientation = %v, want align_image", captured["orientation"])
+	}
+	if captured["compress"] != "geometry" {
+		t.Errorf("compress = %v, want geometry", captured["compress"])
+	}
+	if captured["export_uv"] != false {
+		t.Errorf("export_uv = %v, want false", captured["export_uv"])
+	}
+
+	files := captured["files"].([]any)
+	if len(files) != 4 {
+		t.Fatalf("files count = %d, want 4", len(files))
+	}
+	if files[0].(map[string]any)["type"] != "png" {
+		t.Errorf("files[0].type = %v, want png", files[0].(map[string]any)["type"])
+	}
+	if files[1].(map[string]any)["type"] != "webp" {
+		t.Errorf("files[1].type = %v, want webp", files[1].(map[string]any)["type"])
+	}
+	if files[2].(map[string]any)["type"] != "jpg" {
+		t.Errorf("files[2].type = %v, want jpg", files[2].(map[string]any)["type"])
+	}
+	if len(files[3].(map[string]any)) != 0 {
+		t.Errorf("files[3] = %v, want empty placeholder", files[3])
 	}
 }
 
@@ -666,4 +884,12 @@ func ImageToModelReqPath(path string) provider.ImageToModelRequest {
 
 func MultiviewToModelReqURLs(urls []string) provider.MultiviewToModelRequest {
 	return provider.MultiviewToModelRequest{ImageURLs: urls}
+}
+
+func boolPtr(v bool) *bool {
+	return &v
+}
+
+func intPtr(v int) *int {
+	return &v
 }

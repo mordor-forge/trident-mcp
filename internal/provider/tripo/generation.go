@@ -3,6 +3,7 @@ package tripo
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/mordor-forge/trident-mcp/internal/provider"
 )
@@ -24,6 +25,16 @@ func (p *TripoProvider) TextToModel(ctx context.Context, req provider.TextToMode
 	if req.FaceLimit > 0 {
 		body["face_limit"] = req.FaceLimit
 	}
+	setOptionalBool(body, "texture", req.Texture)
+	setOptionalBool(body, "pbr", req.PBR)
+	setOptionalInt(body, "image_seed", req.ImageSeed)
+	setOptionalInt(body, "model_seed", req.ModelSeed)
+	setOptionalInt(body, "texture_seed", req.TextureSeed)
+	setOptionalString(body, "texture_quality", req.TextureQuality)
+	setOptionalBool(body, "auto_size", req.AutoSize)
+	setOptionalString(body, "compress", req.Compress)
+	setOptionalBool(body, "export_uv", req.ExportUV)
+	setOptionalString(body, "geometry_quality", req.GeometryQuality)
 
 	return p.createTask(ctx, body)
 }
@@ -60,12 +71,18 @@ func (p *TripoProvider) ImageToModel(ctx context.Context, req provider.ImageToMo
 	if req.FaceLimit > 0 {
 		body["face_limit"] = req.FaceLimit
 	}
-	if req.TextureQuality != "" {
-		body["texture_quality"] = req.TextureQuality
-	}
-	if req.Orientation != "" {
-		body["orientation"] = req.Orientation
-	}
+	setOptionalBool(body, "texture", req.Texture)
+	setOptionalBool(body, "pbr", req.PBR)
+	setOptionalInt(body, "model_seed", req.ModelSeed)
+	setOptionalInt(body, "texture_seed", req.TextureSeed)
+	setOptionalString(body, "texture_quality", req.TextureQuality)
+	setOptionalString(body, "texture_alignment", req.TextureAlignment)
+	setOptionalBool(body, "enable_image_autofix", req.EnableImageAutofix)
+	setOptionalBool(body, "auto_size", req.AutoSize)
+	setOptionalString(body, "orientation", req.Orientation)
+	setOptionalString(body, "compress", req.Compress)
+	setOptionalBool(body, "export_uv", req.ExportUV)
+	setOptionalString(body, "geometry_quality", req.GeometryQuality)
 
 	return p.createTask(ctx, body)
 }
@@ -95,8 +112,11 @@ func (p *TripoProvider) MultiviewToModel(ctx context.Context, req provider.Multi
 		return nil, fmt.Errorf("model version %q does not support multiview input", version)
 	}
 
-	// Build file references array.
-	files := make([]map[string]any, count)
+	// Tripo expects a fixed 4-slot array in front/left/back/right order.
+	files := make([]map[string]any, 4)
+	for i := range files {
+		files[i] = map[string]any{}
+	}
 	if len(paths) > 0 {
 		for i, path := range paths {
 			token, err := p.uploadFile(ctx, path)
@@ -125,6 +145,36 @@ func (p *TripoProvider) MultiviewToModel(ctx context.Context, req provider.Multi
 	if req.FaceLimit > 0 {
 		body["face_limit"] = req.FaceLimit
 	}
+	setOptionalBool(body, "texture", req.Texture)
+	setOptionalBool(body, "pbr", req.PBR)
+	setOptionalInt(body, "model_seed", req.ModelSeed)
+	setOptionalInt(body, "texture_seed", req.TextureSeed)
+	setOptionalString(body, "texture_quality", req.TextureQuality)
+	setOptionalString(body, "texture_alignment", req.TextureAlignment)
+	setOptionalBool(body, "enable_image_autofix", req.EnableImageAutofix)
+	setOptionalBool(body, "auto_size", req.AutoSize)
+	setOptionalString(body, "orientation", req.Orientation)
+	setOptionalString(body, "compress", req.Compress)
+	setOptionalBool(body, "export_uv", req.ExportUV)
+	setOptionalString(body, "geometry_quality", req.GeometryQuality)
 
 	return p.createTask(ctx, body)
+}
+
+func setOptionalBool(body map[string]any, key string, value *bool) {
+	if value != nil {
+		body[key] = *value
+	}
+}
+
+func setOptionalInt(body map[string]any, key string, value *int) {
+	if value != nil {
+		body[key] = *value
+	}
+}
+
+func setOptionalString(body map[string]any, key, value string) {
+	if value = strings.TrimSpace(value); value != "" {
+		body[key] = value
+	}
 }
