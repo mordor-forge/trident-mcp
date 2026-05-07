@@ -23,7 +23,7 @@ func (s *Server) registerGenerationTools() {
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "multiview_to_3d",
-		Description: "Generate a 3D model from 2-4 reference images taken from different angles. Produces significantly better geometry than single-image input. This is an async operation — use task_status to poll progress and download_model to retrieve the result.",
+		Description: "Generate a 3D model from 2-4 ordered reference images. Supply views in Tripo's expected order: front, left, back, right. This is an async operation — use task_status to poll progress and download_model to retrieve the result.",
 	}, s.handleMultiviewTo3D)
 }
 
@@ -31,7 +31,7 @@ func (s *Server) registerGenerationTools() {
 func (s *Server) registerStatusTools() {
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "task_status",
-		Description: "Check the status of an async 3D generation or post-processing task. Returns progress info (queued, running, success, or failed).",
+		Description: "Check the status of an async 3D generation or post-processing task. Returns progress info and the current state, such as queued, running, success, failed, cancelled, or expired.",
 	}, s.handleTaskStatus)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{

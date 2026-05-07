@@ -17,10 +17,10 @@ type modelCatalogEntry struct {
 
 var modelCatalog = []modelCatalogEntry{
 	{
-		Name:         "Tripo Turbo",
+		Name:         "Tripo Turbo v1.0",
 		ID:           "turbo",
 		APIVersion:   "Turbo-v1.0-20250506",
-		Description:  "Fast generation with lower quality. Best for quick iterations.",
+		Description:  "Fastest iterations with a lighter control surface than H3.",
 		Capabilities: []string{"text_to_3d", "image_to_3d"},
 	},
 	{
@@ -45,25 +45,25 @@ var modelCatalog = []modelCatalogEntry{
 		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
 	},
 	{
-		Name:         "Tripo v3.0",
+		Name:         "Tripo H3 v3.0",
 		ID:           "v3.0",
 		APIVersion:   "v3.0-20250812",
-		Description:  "Major quality upgrade with detailed textures.",
+		Description:  "H3 generation with high-fidelity geometry and advanced controls.",
 		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
 	},
 	{
-		Name:         "Tripo v3.1",
+		Name:         "Tripo H3 v3.1",
 		ID:           "v3.1",
 		APIVersion:   "v3.1-20260211",
-		Description:  "Best overall quality for general-purpose generation.",
+		Description:  "Latest H3 release with the broadest documented control surface.",
 		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
 	},
 	{
 		Name:         "Tripo P1.0 (Smart Mesh)",
 		ID:           "p1",
 		APIVersion:   "P1-20260311",
-		Description:  "Smart lowpoly generation. Clean topology in ~2 seconds, 48-20K faces, game-engine ready. Ideal for Unity/Unreal/Godot.",
-		Capabilities: []string{"text_to_3d", "image_to_3d"},
+		Description:  "Topology-focused lowpoly generation tuned for clean structured meshes and game-engine workflows.",
+		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
 	},
 }
 

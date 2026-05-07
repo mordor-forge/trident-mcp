@@ -17,7 +17,7 @@ func (s *Server) registerConfigTools() {
 	if s.models != nil {
 		mcp.AddTool(s.mcp, &mcp.Tool{
 			Name:        "list_models",
-			Description: "List the model versions supported by this server with their capabilities.",
+			Description: "List the built-in model catalog supported by this server with their capabilities. This is server metadata, not live discovery from Tripo.",
 		}, s.handleListModels)
 	}
 
@@ -46,8 +46,8 @@ func (s *Server) handleListModels(ctx context.Context, _ *mcp.CallToolRequest, _
 	}
 
 	var b strings.Builder
-	b.WriteString("Available Models\n")
-	b.WriteString("================\n\n")
+	b.WriteString("Built-in Model Catalog\n")
+	b.WriteString("======================\n\n")
 	for _, m := range models {
 		fmt.Fprintf(&b, "%-25s  %s\n", m.Name, m.Description)
 		fmt.Fprintf(&b, "  ID: %s  Capabilities: [%s]\n\n",

@@ -94,7 +94,7 @@ After the 3D model is ready, offer:
 > 1. **Retopologize** — Clean lowpoly version for game use
 > 2. **Convert format** — Export to FBX, OBJ, STL, USDZ, 3MF
 > 3. **Stylize** — Apply LEGO, voxel, Voronoi, or Minecraft style
-> 4. **Send to Blender** — Import via blender-mcp (use the 3d-to-blender skill)
+> 4. **Send to Blender** — Import via the preferred Blender connector (official first, community fallback; use the 3d-to-blender skill)
 > 5. **Regenerate views** — Try different angles for better geometry
 > 6. **Done** — Keep this model
 
