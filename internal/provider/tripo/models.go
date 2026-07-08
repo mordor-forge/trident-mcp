@@ -10,67 +10,159 @@ import (
 type modelCatalogEntry struct {
 	Name         string
 	ID           string
+	Namespace    string
 	APIVersion   string
 	Description  string
 	Capabilities []string
+	Aliases      []string
+	Default      bool
 }
 
 var modelCatalog = []modelCatalogEntry{
 	{
-		Name:         "Tripo Turbo v1.0",
-		ID:           "turbo",
-		APIVersion:   "Turbo-v1.0-20250506",
-		Description:  "Fastest iterations with a lighter control surface than H3.",
-		Capabilities: []string{"text_to_3d", "image_to_3d"},
-	},
-	{
-		Name:         "Tripo v1.4",
-		ID:           "v1.4",
-		APIVersion:   "v1.4-20240625",
-		Description:  "Legacy model version.",
-		Capabilities: []string{"text_to_3d", "image_to_3d"},
-	},
-	{
-		Name:         "Tripo v2.0",
-		ID:           "v2.0",
-		APIVersion:   "v2.0-20240919",
-		Description:  "First version supporting multi-view input.",
+		Name:         "Tripo H3.1",
+		ID:           "v3.1-20260211",
+		Namespace:    "3d_generation",
+		APIVersion:   "v3.1-20260211",
+		Description:  "Default H-series high-fidelity 3D generation model.",
 		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
+		Aliases:      []string{"tripo-v3.1", "v3.1", "h3.1"},
+		Default:      true,
+	},
+	{
+		Name:         "Tripo H3.0",
+		ID:           "v3.0-20250812",
+		Namespace:    "3d_generation",
+		APIVersion:   "v3.0-20250812",
+		Description:  "Previous H-series high-fidelity generation model.",
+		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
+		Aliases:      []string{"tripo-v3.0", "v3.0"},
 	},
 	{
 		Name:         "Tripo v2.5",
-		ID:           "v2.5",
+		ID:           "v2.5-20250123",
+		Namespace:    "3d_generation",
 		APIVersion:   "v2.5-20250123",
-		Description:  "Improved geometry and texture quality.",
+		Description:  "Legacy v2.5 generation model exposed by v3 endpoints.",
+		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
+		Aliases:      []string{"tripo-v2.5", "v2.5"},
+	},
+	{
+		Name:         "Tripo v2.0",
+		ID:           "tripo-v2.0",
+		Namespace:    "3d_generation",
+		APIVersion:   "tripo-v2.0",
+		Description:  "Legacy v2.0 generation model exposed by v3 endpoints.",
 		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
 	},
 	{
-		Name:         "Tripo H3 v3.0",
-		ID:           "v3.0",
-		APIVersion:   "v3.0-20250812",
-		Description:  "H3 generation with high-fidelity geometry and advanced controls.",
-		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
+		Name:         "Tripo Turbo",
+		ID:           "tripo-turbo",
+		Namespace:    "3d_generation",
+		APIVersion:   "tripo-turbo",
+		Description:  "Fast generation model exposed by v3 endpoint tables.",
+		Capabilities: []string{"text_to_3d", "image_to_3d"},
 	},
 	{
-		Name:         "Tripo H3 v3.1",
-		ID:           "v3.1",
-		APIVersion:   "v3.1-20260211",
-		Description:  "Latest H3 release with the broadest documented control surface.",
-		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
-	},
-	{
-		Name:         "Tripo P1.0 (Smart Mesh)",
-		ID:           "p1",
+		Name:         "Tripo P1",
+		ID:           "P1-20260311",
+		Namespace:    "3d_generation",
 		APIVersion:   "P1-20260311",
 		Description:  "Topology-focused lowpoly generation tuned for clean structured meshes and game-engine workflows.",
 		Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
+		Aliases:      []string{"tripo-p1", "p1"},
+	},
+	{
+		Name:         "Seedream v4",
+		ID:           "seedream_v4",
+		Namespace:    "image_generation",
+		APIVersion:   "seedream_v4",
+		Description:  "ByteDance image generation model documented as the text-to-image default.",
+		Capabilities: []string{"text_to_image"},
+		Default:      true,
+	},
+	{
+		Name:         "Seedream v5",
+		ID:           "seedream_v5",
+		Namespace:    "image_generation",
+		APIVersion:   "seedream_v5",
+		Description:  "ByteDance image generation and image editing model.",
+		Capabilities: []string{"text_to_image", "image_to_image"},
+	},
+	{
+		Name:         "Gemini 2.5 Flash Image",
+		ID:           "gemini-2.5-flash",
+		Namespace:    "image_generation",
+		APIVersion:   "gemini-2.5-flash",
+		Description:  "Google fast image model exposed by Tripo image endpoints.",
+		Capabilities: []string{"text_to_image", "image_to_image"},
+	},
+	{
+		Name:         "Gemini 3 Pro Image",
+		ID:           "gemini-3-pro",
+		Namespace:    "image_generation",
+		APIVersion:   "gemini-3-pro",
+		Description:  "Google high-quality image model exposed by Tripo image endpoints.",
+		Capabilities: []string{"text_to_image", "image_to_image"},
+	},
+	{
+		Name:         "Gemini 3.1 Flash Image",
+		ID:           "gemini-3.1-flash",
+		Namespace:    "image_generation",
+		APIVersion:   "gemini-3.1-flash",
+		Description:  "Google latest fast image model exposed by Tripo image endpoints.",
+		Capabilities: []string{"text_to_image", "image_to_image"},
+	},
+	{
+		Name:         "Chat Image 1",
+		ID:           "chat_image_1",
+		Namespace:    "image_generation",
+		APIVersion:   "chat_image_1",
+		Description:  "OpenAI image model exposed by Tripo image endpoints.",
+		Capabilities: []string{"text_to_image", "image_to_image"},
+	},
+	{
+		Name:         "Chat Image 1.5",
+		ID:           "chat_image_1.5",
+		Namespace:    "image_generation",
+		APIVersion:   "chat_image_1.5",
+		Description:  "OpenAI higher-quality image model exposed by Tripo image endpoints.",
+		Capabilities: []string{"text_to_image", "image_to_image"},
+	},
+	{
+		Name:         "Chat Image 2",
+		ID:           "chat_image_2",
+		Namespace:    "image_generation",
+		APIVersion:   "chat_image_2",
+		Description:  "OpenAI latest image model exposed by Tripo image endpoints.",
+		Capabilities: []string{"text_to_image", "image_to_image"},
+	},
+	{
+		Name:         "Tripo Rig v2.0",
+		ID:           "rig-v2.0",
+		Namespace:    "animation",
+		APIVersion:   "rig-v2.0",
+		Description:  "Current rigging model for Tripo animation workflows.",
+		Capabilities: []string{"rig_model"},
+		Default:      true,
+	},
+	{
+		Name:         "Tripo Rig v1.0",
+		ID:           "rig-v1.0",
+		Namespace:    "animation",
+		APIVersion:   "rig-v1.0",
+		Description:  "Legacy rigging model for Tripo animation workflows.",
+		Capabilities: []string{"rig_model"},
 	},
 }
 
 var (
-	modelVersionMap     = buildModelVersionMap()
-	defaultModelVersion = modelVersionMap["v3.1"]
-	multiviewVersions   = buildMultiviewVersions()
+	modelVersionMap = buildModelVersionMap()
+	defaultModel    = "v3.1-20260211"
+	// defaultModelVersion is kept for older internal tests and compatibility
+	// helpers that still call resolveModelVersion.
+	defaultModelVersion = defaultModel
+	multiviewModels     = buildMultiviewModels()
 
 	// validFormats maps accepted user input to the canonical Tripo format name.
 	validFormats = map[string]string{
@@ -97,17 +189,28 @@ func buildModelVersionMap() map[string]string {
 	for _, model := range modelCatalog {
 		versions[model.ID] = model.APIVersion
 	}
+	versions["tripo-v3.1"] = "v3.1-20260211"
+	versions["v3.1"] = "v3.1-20260211"
+	versions["h3.1"] = "v3.1-20260211"
+	versions["tripo-v3.0"] = "v3.0-20250812"
+	versions["v3.0"] = "v3.0-20250812"
+	versions["tripo-v2.5"] = "v2.5-20250123"
+	versions["v2.5"] = "v2.5-20250123"
+	versions["v2.0"] = "tripo-v2.0"
+	versions["turbo"] = "tripo-turbo"
+	versions["tripo-p1"] = "P1-20260311"
+	versions["p1"] = "P1-20260311"
 	return versions
 }
 
-func buildMultiviewVersions() map[string]bool {
-	versions := make(map[string]bool)
+func buildMultiviewModels() map[string]bool {
+	models := make(map[string]bool)
 	for _, model := range modelCatalog {
 		if hasCapability(model.Capabilities, "multiview_to_3d") {
-			versions[model.APIVersion] = true
+			models[model.APIVersion] = true
 		}
 	}
-	return versions
+	return models
 }
 
 func hasCapability(capabilities []string, target string) bool {
@@ -125,8 +228,11 @@ func supportedModels() []provider.ModelInfo {
 		models = append(models, provider.ModelInfo{
 			Name:         model.Name,
 			ID:           model.ID,
+			Namespace:    model.Namespace,
 			Description:  model.Description,
 			Capabilities: append([]string(nil), model.Capabilities...),
+			Aliases:      append([]string(nil), model.Aliases...),
+			Default:      model.Default,
 		})
 	}
 	return models
@@ -140,14 +246,18 @@ func (p *TripoProvider) ListModels(_ context.Context) ([]provider.ModelInfo, err
 // resolveModelVersion maps a friendly version name to the full API version string.
 // Empty input returns the default version. Unrecognized values are returned as-is.
 func resolveModelVersion(version string) string {
-	version = strings.TrimSpace(version)
-	if version == "" {
-		return defaultModelVersion
+	return resolveModel(version)
+}
+
+func resolveModel(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return defaultModel
 	}
-	if full, ok := modelVersionMap[strings.ToLower(version)]; ok {
+	if full, ok := modelVersionMap[strings.ToLower(model)]; ok {
 		return full
 	}
-	return version
+	return model
 }
 
 // normalizeFormat accepts case-insensitive format names plus the GLB alias.

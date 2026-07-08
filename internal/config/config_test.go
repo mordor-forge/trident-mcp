@@ -9,6 +9,7 @@ import (
 
 func TestLoad_TripoAPIKey(t *testing.T) {
 	t.Setenv("TRIPO_API_KEY", "tsk_test-key")
+	t.Setenv("TRIPO_BASE_URL", "https://tripo.internal/v3")
 	t.Setenv("MODEL_OUTPUT_DIR", t.TempDir())
 
 	cfg, err := Load()
@@ -17,6 +18,9 @@ func TestLoad_TripoAPIKey(t *testing.T) {
 	}
 	if cfg.Provider.APIKey != "tsk_test-key" {
 		t.Errorf("APIKey = %q, want %q", cfg.Provider.APIKey, "tsk_test-key")
+	}
+	if cfg.Provider.BaseURL != "https://tripo.internal/v3" {
+		t.Errorf("BaseURL = %q, want custom base URL", cfg.Provider.BaseURL)
 	}
 	if cfg.Backend() != BackendTripo {
 		t.Errorf("Backend() = %q, want %q", cfg.Backend(), BackendTripo)

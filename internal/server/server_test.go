@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -14,12 +15,22 @@ import (
 // --- Mock providers ---
 
 type mockGenerator struct {
-	textResult      *provider.ModelOperation
-	textErr         error
-	imageResult     *provider.ModelOperation
-	imageErr        error
-	multiviewResult *provider.ModelOperation
-	multiviewErr    error
+	textResult           *provider.ModelOperation
+	textErr              error
+	imageResult          *provider.ModelOperation
+	imageErr             error
+	multiviewResult      *provider.ModelOperation
+	multiviewErr         error
+	textImageResult      *provider.ModelOperation
+	textImageErr         error
+	imageImageResult     *provider.ModelOperation
+	imageImageErr        error
+	imageMultiviewResult *provider.ModelOperation
+	imageMultiviewErr    error
+	editMultiviewResult  *provider.ModelOperation
+	editMultiviewErr     error
+	imageSplatResult     *provider.ModelOperation
+	imageSplatErr        error
 }
 
 func (m *mockGenerator) TextToModel(_ context.Context, _ provider.TextToModelRequest) (*provider.ModelOperation, error) {
@@ -34,11 +45,41 @@ func (m *mockGenerator) MultiviewToModel(_ context.Context, _ provider.Multiview
 	return m.multiviewResult, m.multiviewErr
 }
 
+func (m *mockGenerator) TextToImage(_ context.Context, _ provider.TextToImageRequest) (*provider.ModelOperation, error) {
+	return m.textImageResult, m.textImageErr
+}
+
+func (m *mockGenerator) ImageToImage(_ context.Context, _ provider.ImageToImageRequest) (*provider.ModelOperation, error) {
+	return m.imageImageResult, m.imageImageErr
+}
+
+func (m *mockGenerator) ImageToMultiview(_ context.Context, _ provider.ImageToMultiviewRequest) (*provider.ModelOperation, error) {
+	return m.imageMultiviewResult, m.imageMultiviewErr
+}
+
+func (m *mockGenerator) EditMultiview(_ context.Context, _ provider.EditMultiviewRequest) (*provider.ModelOperation, error) {
+	return m.editMultiviewResult, m.editMultiviewErr
+}
+
+func (m *mockGenerator) ImageToSplat(_ context.Context, _ provider.ImageToSplatRequest) (*provider.ModelOperation, error) {
+	return m.imageSplatResult, m.imageSplatErr
+}
+
 type mockStatus struct {
 	statusResult   *provider.ModelTaskStatus
 	statusErr      error
 	downloadResult *provider.ModelResult
 	downloadErr    error
+	batchResult    *provider.BatchTasksResult
+	batchErr       error
+	uploadResult   *provider.FileUpload
+	uploadErr      error
+	presignResult  *provider.FileUpload
+	presignErr     error
+	balanceResult  *provider.AccountBalance
+	balanceErr     error
+	usageResult    *provider.AccountUsageResult
+	usageErr       error
 }
 
 func (m *mockStatus) Status(_ context.Context, _ string) (*provider.ModelTaskStatus, error) {
@@ -49,13 +90,87 @@ func (m *mockStatus) Download(_ context.Context, _ string, _ string) (*provider.
 	return m.downloadResult, m.downloadErr
 }
 
+func (m *mockStatus) BatchTasks(_ context.Context, _ []string) (*provider.BatchTasksResult, error) {
+	return m.batchResult, m.batchErr
+}
+
+func (m *mockStatus) UploadFile(_ context.Context, _ provider.UploadFileRequest) (*provider.FileUpload, error) {
+	return m.uploadResult, m.uploadErr
+}
+
+func (m *mockStatus) CreateFileUpload(_ context.Context, _ provider.CreateFileUploadRequest) (*provider.FileUpload, error) {
+	return m.presignResult, m.presignErr
+}
+
+func (m *mockStatus) GetBalance(_ context.Context) (*provider.AccountBalance, error) {
+	return m.balanceResult, m.balanceErr
+}
+
+func (m *mockStatus) GetUsage(_ context.Context) (*provider.AccountUsageResult, error) {
+	return m.usageResult, m.usageErr
+}
+
+type mockCommon struct {
+	batchResult   *provider.BatchTasksResult
+	batchErr      error
+	uploadResult  *provider.FileUpload
+	uploadErr     error
+	presignResult *provider.FileUpload
+	presignErr    error
+	balanceResult *provider.AccountBalance
+	balanceErr    error
+	usageResult   *provider.AccountUsageResult
+	usageErr      error
+}
+
+func (m *mockCommon) BatchTasks(_ context.Context, _ []string) (*provider.BatchTasksResult, error) {
+	return m.batchResult, m.batchErr
+}
+
+func (m *mockCommon) UploadFile(_ context.Context, _ provider.UploadFileRequest) (*provider.FileUpload, error) {
+	return m.uploadResult, m.uploadErr
+}
+
+func (m *mockCommon) CreateFileUpload(_ context.Context, _ provider.CreateFileUploadRequest) (*provider.FileUpload, error) {
+	return m.presignResult, m.presignErr
+}
+
+func (m *mockCommon) GetBalance(_ context.Context) (*provider.AccountBalance, error) {
+	return m.balanceResult, m.balanceErr
+}
+
+func (m *mockCommon) GetUsage(_ context.Context) (*provider.AccountUsageResult, error) {
+	return m.usageResult, m.usageErr
+}
+
+type mockGeneratorWithCommon struct {
+	mockGenerator
+	mockCommon
+}
+
 type mockPostProc struct {
-	retopResult   *provider.ModelOperation
-	retopErr      error
-	convertResult *provider.ModelOperation
-	convertErr    error
-	stylizeResult *provider.ModelOperation
-	stylizeErr    error
+	retopResult    *provider.ModelOperation
+	retopErr       error
+	convertResult  *provider.ModelOperation
+	convertErr     error
+	stylizeResult  *provider.ModelOperation
+	stylizeErr     error
+	importResult   *provider.ModelOperation
+	importErr      error
+	refineResult   *provider.ModelOperation
+	refineErr      error
+	textureResult  *provider.ModelOperation
+	textureErr     error
+	segmentResult  *provider.ModelOperation
+	segmentErr     error
+	completeResult *provider.ModelOperation
+	completeErr    error
+	rigCheckResult *provider.RigCheckResult
+	rigCheckErr    error
+	rigResult      *provider.ModelOperation
+	rigErr         error
+	retargetResult *provider.ModelOperation
+	retargetErr    error
 }
 
 func (m *mockPostProc) Retopologize(_ context.Context, _ provider.RetopologyRequest) (*provider.ModelOperation, error) {
@@ -68,6 +183,38 @@ func (m *mockPostProc) ConvertFormat(_ context.Context, _ provider.ConvertReques
 
 func (m *mockPostProc) Stylize(_ context.Context, _ provider.StylizeRequest) (*provider.ModelOperation, error) {
 	return m.stylizeResult, m.stylizeErr
+}
+
+func (m *mockPostProc) ImportModel(_ context.Context, _ provider.ImportModelRequest) (*provider.ModelOperation, error) {
+	return m.importResult, m.importErr
+}
+
+func (m *mockPostProc) RefineModel(_ context.Context, _ provider.RefineModelRequest) (*provider.ModelOperation, error) {
+	return m.refineResult, m.refineErr
+}
+
+func (m *mockPostProc) TextureModel(_ context.Context, _ provider.TextureModelRequest) (*provider.ModelOperation, error) {
+	return m.textureResult, m.textureErr
+}
+
+func (m *mockPostProc) SegmentMesh(_ context.Context, _ provider.SegmentMeshRequest) (*provider.ModelOperation, error) {
+	return m.segmentResult, m.segmentErr
+}
+
+func (m *mockPostProc) CompleteMesh(_ context.Context, _ provider.CompleteMeshRequest) (*provider.ModelOperation, error) {
+	return m.completeResult, m.completeErr
+}
+
+func (m *mockPostProc) RigCheck(_ context.Context, _ provider.RigCheckRequest) (*provider.RigCheckResult, error) {
+	return m.rigCheckResult, m.rigCheckErr
+}
+
+func (m *mockPostProc) RigModel(_ context.Context, _ provider.RigModelRequest) (*provider.ModelOperation, error) {
+	return m.rigResult, m.rigErr
+}
+
+func (m *mockPostProc) RetargetAnimation(_ context.Context, _ provider.RetargetAnimationRequest) (*provider.ModelOperation, error) {
+	return m.retargetResult, m.retargetErr
 }
 
 type mockModelLister struct {
@@ -176,16 +323,35 @@ func TestToolsRegistered_AllProviders(t *testing.T) {
 	}
 
 	wantTools := map[string]bool{
-		"text_to_3d":      false,
-		"image_to_3d":     false,
-		"multiview_to_3d": false,
-		"task_status":     false,
-		"download_model":  false,
-		"retopologize":    false,
-		"convert_format":  false,
-		"stylize":         false,
-		"list_models":     false,
-		"get_config":      false,
+		"text_to_3d":         false,
+		"image_to_3d":        false,
+		"multiview_to_3d":    false,
+		"text_to_image":      false,
+		"image_to_image":     false,
+		"image_to_multiview": false,
+		"edit_multiview":     false,
+		"image_to_splat":     false,
+		"task_status":        false,
+		"get_task":           false,
+		"get_tasks":          false,
+		"get_balance":        false,
+		"get_usage":          false,
+		"download_model":     false,
+		"upload_file":        false,
+		"create_file_upload": false,
+		"retopologize":       false,
+		"convert_format":     false,
+		"stylize":            false,
+		"import_model":       false,
+		"refine_model":       false,
+		"texture_model":      false,
+		"segment_mesh":       false,
+		"complete_mesh":      false,
+		"rig_check":          false,
+		"rig_model":          false,
+		"retarget_animation": false,
+		"list_models":        false,
+		"get_config":         false,
 	}
 
 	for _, tool := range result.Tools {
@@ -251,6 +417,63 @@ func TestGenerationToolsNotRegistered_WithoutStatusProvider(t *testing.T) {
 	for _, tool := range result.Tools {
 		if tool.Name == "text_to_3d" || tool.Name == "image_to_3d" || tool.Name == "multiview_to_3d" {
 			t.Fatalf("generation tool %q should not be registered without status support", tool.Name)
+		}
+	}
+}
+
+func TestCommonToolsRegistered_WithoutStatusProvider(t *testing.T) {
+	var gen provider.ModelGenerator = &mockGeneratorWithCommon{}
+	srv := NewWithOptions(gen, nil, nil, nil, Options{
+		Backend:   "tripo",
+		OutputDir: t.TempDir(),
+		Version:   "test-version",
+	})
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	go func() {
+		_ = srv.mcp.Run(ctx, serverTransport)
+	}()
+
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "test-client",
+		Version: "0.0.1",
+	}, nil)
+
+	session, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = session.Close()
+	})
+
+	result, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+
+	wantCommon := map[string]bool{
+		"get_tasks":          false,
+		"get_balance":        false,
+		"get_usage":          false,
+		"upload_file":        false,
+		"create_file_upload": false,
+	}
+	for _, tool := range result.Tools {
+		if _, ok := wantCommon[tool.Name]; ok {
+			wantCommon[tool.Name] = true
+		}
+		if tool.Name == "task_status" || tool.Name == "download_model" {
+			t.Fatalf("status tool %q should not be registered without status support", tool.Name)
+		}
+	}
+	for name, found := range wantCommon {
+		if !found {
+			t.Errorf("common tool %q not registered", name)
 		}
 	}
 }
@@ -384,6 +607,33 @@ func TestMultiviewTo3D_Success(t *testing.T) {
 	assertStructuredField(t, res, "taskId", "task-mv-1")
 }
 
+func TestTextToImage_Success(t *testing.T) {
+	gen := &mockGenerator{
+		textImageResult: &provider.ModelOperation{
+			TaskID: "task-text-image",
+			Status: "submitted",
+		},
+	}
+
+	session := connectTestClient(t, gen, &mockStatus{}, nil, nil)
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "text_to_image",
+		Arguments: map[string]any{
+			"prompt": "a product photo",
+			"model":  "seedream_v5",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatal("expected success, got error result")
+	}
+	assertContentContains(t, res, "Image generation started")
+	assertStructuredField(t, res, "taskId", "task-text-image")
+}
+
 // --- Status tool tests ---
 
 func TestTaskStatus_Success(t *testing.T) {
@@ -441,6 +691,148 @@ func TestTaskStatus_WithError(t *testing.T) {
 	}
 
 	assertContentContains(t, res, "content moderation rejected")
+}
+
+func TestGetTasks_Success(t *testing.T) {
+	stat := &mockStatus{
+		batchResult: &provider.BatchTasksResult{
+			Tasks: map[string]provider.ModelTaskStatus{
+				"task-a": {TaskID: "task-a", Status: "success"},
+			},
+			Missed: []string{"task-b"},
+		},
+	}
+
+	session := connectTestClient(t, nil, stat, nil, nil)
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "get_tasks",
+		Arguments: map[string]any{
+			"taskIds": []string{"task-a", "task-b"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatal("expected success, got error result")
+	}
+	assertContentContains(t, res, "task-a")
+	assertContentContains(t, res, "task-b")
+}
+
+func TestCreateFileUpload_Success(t *testing.T) {
+	stat := &mockStatus{
+		presignResult: &provider.FileUpload{
+			PresignedURL: "https://storage.example/upload",
+			FileToken:    "file_presigned",
+			ExpiresIn:    1800,
+		},
+	}
+
+	session := connectTestClient(t, nil, stat, nil, nil)
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "create_file_upload",
+		Arguments: map[string]any{
+			"format": "glb",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatal("expected success, got error result")
+	}
+	assertContentContains(t, res, "file_presigned")
+	assertStructuredField(t, res, "fileToken", "file_presigned")
+}
+
+func TestUploadFile_Success(t *testing.T) {
+	stat := &mockStatus{
+		uploadResult: &provider.FileUpload{
+			FileToken: "file_uploaded",
+		},
+	}
+
+	session := connectTestClient(t, nil, stat, nil, nil)
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "upload_file",
+		Arguments: map[string]any{
+			"filePath": "/tmp/model.glb",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatal("expected success, got error result")
+	}
+	assertContentContains(t, res, "file_uploaded")
+	assertStructuredField(t, res, "fileToken", "file_uploaded")
+}
+
+func TestGetBalance_Success(t *testing.T) {
+	stat := &mockStatus{
+		balanceResult: &provider.AccountBalance{
+			Balance: 10000.5,
+			Frozen:  200.25,
+		},
+	}
+
+	session := connectTestClient(t, nil, stat, nil, nil)
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "get_balance",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatal("expected success, got error result")
+	}
+	assertContentContains(t, res, "10000.5")
+	assertStructuredField(t, res, "balance", 10000.5)
+	assertStructuredField(t, res, "frozen", 200.25)
+}
+
+func TestGetUsage_Success(t *testing.T) {
+	stat := &mockStatus{
+		usageResult: &provider.AccountUsageResult{
+			Records: []provider.AccountUsageRecord{
+				{
+					TaskID:          "task-usage",
+					Type:            "text_to_model",
+					CreditsConsumed: 5.25,
+					CreatedAt:       "2026-07-08T10:00:00Z",
+				},
+			},
+		},
+	}
+
+	session := connectTestClient(t, nil, stat, nil, nil)
+
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "get_usage",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatal("expected success, got error result")
+	}
+	assertContentContains(t, res, "task-usage")
+	assertStructuredField(t, res, "records", []any{
+		map[string]any{
+			"taskId":          "task-usage",
+			"type":            "text_to_model",
+			"creditsConsumed": 5.25,
+			"createdAt":       "2026-07-08T10:00:00Z",
+		},
+	})
 }
 
 func TestDownloadModel_Success(t *testing.T) {
@@ -636,6 +1028,46 @@ func TestStylize_Error(t *testing.T) {
 	assertContentContains(t, res, "unsupported style")
 }
 
+func TestSegmentMeshAndRigCheck_Success(t *testing.T) {
+	pp := &mockPostProc{
+		segmentResult: &provider.ModelOperation{TaskID: "segment-1", Status: "submitted"},
+		rigCheckResult: &provider.RigCheckResult{
+			Riggable: true,
+			RigType:  "biped",
+		},
+	}
+	session := connectTestClient(t, nil, &mockStatus{}, pp, nil)
+
+	segment, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "segment_mesh",
+		Arguments: map[string]any{
+			"input": "task-model",
+		},
+	})
+	if err != nil {
+		t.Fatalf("segment_mesh CallTool: %v", err)
+	}
+	if segment.IsError {
+		t.Fatal("expected segment_mesh success")
+	}
+	assertStructuredField(t, segment, "taskId", "segment-1")
+
+	rigCheck, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name: "rig_check",
+		Arguments: map[string]any{
+			"input": "task-model",
+		},
+	})
+	if err != nil {
+		t.Fatalf("rig_check CallTool: %v", err)
+	}
+	if rigCheck.IsError {
+		t.Fatal("expected rig_check success")
+	}
+	assertContentContains(t, rigCheck, "biped")
+	assertStructuredField(t, rigCheck, "rigType", "biped")
+}
+
 // --- Config tool tests ---
 
 func TestListModels_Success(t *testing.T) {
@@ -721,10 +1153,10 @@ func assertContentContains(t *testing.T, res *mcp.CallToolResult, substr string)
 	t.Errorf("no content entry contains %q", substr)
 }
 
-func assertStructuredField(t *testing.T, res *mcp.CallToolResult, key, want string) {
+func assertStructuredField(t *testing.T, res *mcp.CallToolResult, key string, want any) {
 	t.Helper()
 	if res.StructuredContent == nil {
-		t.Fatalf("structured content is nil, expected field %q=%q", key, want)
+		t.Fatalf("structured content is nil, expected field %q=%#v", key, want)
 	}
 
 	data, err := json.Marshal(res.StructuredContent)
@@ -742,7 +1174,7 @@ func assertStructuredField(t *testing.T, res *mcp.CallToolResult, key, want stri
 		t.Errorf("structured content missing field %q", key)
 		return
 	}
-	if s, ok := got.(string); ok && s != want {
-		t.Errorf("structured content[%q] = %q, want %q", key, s, want)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("structured content[%q] = %#v, want %#v", key, got, want)
 	}
 }

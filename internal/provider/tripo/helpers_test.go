@@ -234,8 +234,9 @@ func TestResolveModelVersion(t *testing.T) {
 	}{
 		{"", defaultModelVersion},
 		{"v3.1", "v3.1-20260211"},
+		{"tripo-v3.1", "v3.1-20260211"},
 		{"v2.5", "v2.5-20250123"},
-		{"turbo", "Turbo-v1.0-20250506"},
+		{"turbo", "tripo-turbo"},
 		{"v3.1-20260211", "v3.1-20260211"}, // already full version, returned as-is
 		{"custom-version", "custom-version"},
 	}

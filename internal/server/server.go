@@ -13,8 +13,13 @@ import (
 type Server struct {
 	mcp       *mcp.Server
 	generator provider.ModelGenerator
+	imageGen  provider.ImageGenerator
 	status    provider.ModelStatus
 	postproc  provider.ModelPostProcessor
+	modelproc provider.ModelProcessor
+	meshproc  provider.MeshProcessor
+	animator  provider.Animator
+	common    provider.CommonAPI
 	models    provider.ModelLister
 	backend   string
 	outputDir string
@@ -62,9 +67,13 @@ func NewWithOptions(generator provider.ModelGenerator, status provider.ModelStat
 		outputDir: opts.OutputDir,
 		version:   opts.Version,
 	}
+	s.discoverCapabilities(generator, status, postproc, models)
 
 	if generator != nil && status != nil {
 		s.registerGenerationTools()
+	}
+	if s.imageGen != nil && status != nil {
+		s.registerImageTools()
 	}
 	if status != nil {
 		s.registerStatusTools()
@@ -72,9 +81,44 @@ func NewWithOptions(generator provider.ModelGenerator, status provider.ModelStat
 	if postproc != nil && status != nil {
 		s.registerPostProcessTools()
 	}
+	if s.modelproc != nil && status != nil {
+		s.registerModelProcessTools()
+	}
+	if s.meshproc != nil && status != nil {
+		s.registerMeshTools()
+	}
+	if s.animator != nil && status != nil {
+		s.registerAnimationTools()
+	}
+	if s.common != nil {
+		s.registerCommonTools()
+	}
 	s.registerConfigTools()
 
 	return s
+}
+
+func (s *Server) discoverCapabilities(candidates ...any) {
+	for _, candidate := range candidates {
+		if candidate == nil {
+			continue
+		}
+		if v, ok := candidate.(provider.ImageGenerator); ok && s.imageGen == nil {
+			s.imageGen = v
+		}
+		if v, ok := candidate.(provider.ModelProcessor); ok && s.modelproc == nil {
+			s.modelproc = v
+		}
+		if v, ok := candidate.(provider.MeshProcessor); ok && s.meshproc == nil {
+			s.meshproc = v
+		}
+		if v, ok := candidate.(provider.Animator); ok && s.animator == nil {
+			s.animator = v
+		}
+		if v, ok := candidate.(provider.CommonAPI); ok && s.common == nil {
+			s.common = v
+		}
+	}
 }
 
 // Run starts the MCP server on the stdio transport, blocking until the

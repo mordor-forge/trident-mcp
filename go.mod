@@ -1,6 +1,6 @@
 module github.com/mordor-forge/trident-mcp
 
-go 1.25.9
+go 1.25.12
 
 require github.com/modelcontextprotocol/go-sdk v1.5.0
 

@@ -17,7 +17,7 @@ func (p *TripoProvider) Status(ctx context.Context, taskID string) (*provider.Mo
 		return nil, err
 	}
 
-	resp, err := p.doJSON(ctx, http.MethodGet, "/task/"+taskID, nil)
+	resp, err := p.doJSON(ctx, http.MethodGet, "/tasks/"+taskID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -27,16 +27,9 @@ func (p *TripoProvider) Status(ctx context.Context, taskID string) (*provider.Mo
 		return nil, fmt.Errorf("decoding task status: %w", err)
 	}
 
-	result := &provider.ModelTaskStatus{
-		TaskID:   status.TaskID,
-		Status:   status.Status,
-		Progress: status.Progress,
-	}
-	if status.ErrorMsg != nil {
-		result.Error = *status.ErrorMsg
-	}
+	result := providerTaskStatus(status)
 
-	return result, nil
+	return &result, nil
 }
 
 // Download retrieves a completed model and saves it to disk.
@@ -54,7 +47,7 @@ func (p *TripoProvider) Download(ctx context.Context, taskID string, format stri
 	}
 
 	// Get task status to find download URL.
-	resp, err := p.doJSON(ctx, http.MethodGet, "/task/"+taskID, nil)
+	resp, err := p.doJSON(ctx, http.MethodGet, "/tasks/"+taskID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -71,14 +64,7 @@ func (p *TripoProvider) Download(ctx context.Context, taskID string, format stri
 		return nil, fmt.Errorf("task %s has no output", taskID)
 	}
 
-	// Pick the best available model URL.
-	modelURL := status.Output.PBRModel
-	if modelURL == "" {
-		modelURL = status.Output.Model
-	}
-	if modelURL == "" {
-		modelURL = status.Output.BaseModel
-	}
+	modelURL := modelDownloadURL(status.Output, requestedFormat)
 	if modelURL == "" {
 		return nil, fmt.Errorf("task %s has no model download URL", taskID)
 	}
@@ -124,4 +110,30 @@ func (p *TripoProvider) Download(ctx context.Context, taskID string, format stri
 		Format:   actualFormat,
 		TaskID:   taskID,
 	}, nil
+}
+
+func modelDownloadURL(output *taskOutput, requestedFormat string) string {
+	candidates := []string{
+		firstNonEmpty(output.PBRModelURL, output.PBRModel),
+		firstNonEmpty(output.ModelURL, output.Model),
+		firstNonEmpty(output.BaseModelURL, output.BaseModel),
+	}
+	candidates = append(candidates, output.ModelURLs...)
+
+	var fallback string
+	for _, candidate := range candidates {
+		if candidate == "" {
+			continue
+		}
+		if fallback == "" {
+			fallback = candidate
+		}
+		if requestedFormat == "" {
+			return candidate
+		}
+		if actualFormat, ok := formatFromURL(candidate); ok && actualFormat == requestedFormat {
+			return candidate
+		}
+	}
+	return fallback
 }
