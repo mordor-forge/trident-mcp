@@ -1,22 +1,25 @@
 ---
 name: multiview-3d
-description: Multi-angle 3D model generation pipeline using gemini-media-mcp for multi-view image generation and trident-mcp for 3D reconstruction. Use when the user wants to create a high-quality 3D model from a reference photo using multiple generated angles, or when they mention "multi-angle 3D", "multiview 3D", "photo to 3D with multiple views", "generate 3D from reference". This skill orchestrates the full pipeline from reference image through multi-angle generation to 3D reconstruction.
+description: Use when the user wants a high-quality 3D model from multiple views, a reference photo expanded into front/side/back views, Tripo multiview reconstruction, or a multi-angle image-to-3D pipeline.
 ---
 
 # Multi-View 3D Pipeline Skill
 
-You are an expert at orchestrating the multi-angle 3D generation pipeline. This skill combines **gemini-media-mcp** (multi-angle image generation via Gemini) with **trident-mcp** (3D reconstruction via Tripo) to produce high-quality 3D models from reference photos or generated images.
+You are an expert at orchestrating the multi-angle 3D generation pipeline. This skill uses **trident-mcp** for Tripo multiview generation/reconstruction, and can optionally use **gemini-media-mcp** for more controlled reference-image creation or iterative angle edits.
 
-This is a composed workflow skill. `trident-mcp` itself remains independently useful in any MCP-capable client, but this skill is specifically meant to couple it with [`gemini-media-mcp`](https://github.com/mordor-forge/gemini-media-mcp) for a fuller automated pipeline from idea to 3D model.
+This is a composed workflow skill. `trident-mcp` itself remains independently useful in any MCP-capable client. Pair it with [`gemini-media-mcp`](https://github.com/mordor-forge/gemini-media-mcp) when the workflow needs richer image ideation or manual control over each generated angle.
 
 ## Prerequisites
 
-This skill requires **two MCP servers** to be configured:
+Minimum:
 
-1. **gemini-media-mcp** — For generating consistent multi-angle views (needs `generate_image` and `edit_image` tools). Repository: <https://github.com/mordor-forge/gemini-media-mcp>
-2. **trident-mcp** — For 3D reconstruction from multi-view images (needs `multiview_to_3d` tool)
+- **trident-mcp** — Needs `multiview_to_3d`. Prefer also having `get_balance`, `task_status`, `download_model`, `image_to_multiview`, and `edit_multiview`.
 
-Before starting, verify both are available by checking for the required tools. If either is missing, tell the user which MCP server to configure.
+Optional:
+
+- **gemini-media-mcp** — Useful for custom multi-angle reference generation (needs `generate_image` and `edit_image`). Repository: <https://github.com/mordor-forge/gemini-media-mcp>
+
+Before starting, verify the available tools. If `multiview_to_3d` is missing, tell the user to configure `trident-mcp`. If only Gemini tools are missing, use Tripo's native `image_to_multiview` route when possible.
 
 ## The Pipeline Workflow
 
@@ -38,9 +41,10 @@ Three paths:
 - Proceed to Phase 3
 
 **"Generate an image first":**
-- Use the `generate_image` tool from gemini-media-mcp
+- Use `text_to_image` from trident-mcp or `generate_image` from gemini-media-mcp
 - Craft a prompt focused on a single object with clear form and clean background
 - Example: "A detailed fantasy sword with ornate handle, clean white background, product photography style, front view"
+- If using `text_to_image`, poll the task and use the completed `output.imageUrl` as the source image; do not pass the image task ID as an image input.
 - Show the result, offer to regenerate if needed
 - Proceed to Phase 3
 
@@ -51,7 +55,15 @@ Three paths:
 
 Two approaches, offer the user a choice:
 
-#### Approach A: Iterative (Recommended)
+#### Approach A: Native Tripo Multiview (Recommended When Available)
+
+Use `image_to_multiview` from trident-mcp to create ordered multi-angle views from a single reference image. If a generated view is wrong, use `edit_multiview` with per-view `prompts` entries for targeted corrections before reconstruction.
+
+This is the shortest path when the source image is already strong and the user does not need manual control over every intermediate angle.
+
+After `image_to_multiview` or `edit_multiview` succeeds, prefer passing that successful task ID to `multiview_to_3d` as `taskId`. Extract individual view URLs only if the tool version lacks task-id reuse.
+
+#### Approach B: Iterative Gemini Views
 
 Generate each angle separately using `edit_image` from gemini-media-mcp, producing more consistent results:
 
@@ -62,7 +74,7 @@ Generate each angle separately using `edit_image` from gemini-media-mcp, produci
 
 Show each generated view to the user before proceeding. If a view looks wrong, regenerate it.
 
-#### Approach B: Character Sheet (Single Generation)
+#### Approach C: Character Sheet (Single Generation)
 
 Generate a 2x2 grid of views in one shot using `generate_image`:
 
@@ -79,10 +91,12 @@ After generation, the individual views need to be cropped from the grid. If Imag
 
 Feed the generated views to trident-mcp:
 
-1. Call `multiview_to_3d` with the 2-4 angle images (paths or URLs)
-2. Use the latest model version (v3.1) for best quality
-3. Poll `task_status` until complete — this typically takes 1-3 minutes
-4. Download the result with `download_model` in its actual task output format
+1. Run `get_balance` before credit-spending work when a live Tripo key is configured.
+2. Call `multiview_to_3d` with either the successful multiview `taskId`, or 2-4 angle images (paths/URLs) in front/left/back/right order.
+3. Use `v3.1-20260211` for best quality, or `P1-20260311` when the user needs low-poly/game-ready topology.
+4. Use options such as `quad`, `smartLowPoly`, `generateParts`, `faceLimit`, `textureAlignment`, and `enableImageAutofix` when topology or texture alignment matters. For P1, omit `smartLowPoly` because P1 is already low-poly; use `faceLimit` instead.
+5. Poll `task_status` until complete — this typically takes 1-3 minutes.
+6. Download the result with `download_model` in its actual task output format.
 
 If the user needs FBX, OBJ, STL, USDZ, or 3MF instead of the task's native output, run `convert_format` first and then download the conversion task.
 
@@ -93,10 +107,12 @@ After the 3D model is ready, offer:
 > "Multi-view 3D model generated! Saved to: [path]. What would you like to do?"
 > 1. **Retopologize** — Clean lowpoly version for game use
 > 2. **Convert format** — Export to FBX, OBJ, STL, USDZ, 3MF
-> 3. **Stylize** — Apply LEGO, voxel, Voronoi, or Minecraft style
-> 4. **Send to Blender** — Import via the preferred Blender connector (official first, community fallback; use the 3d-to-blender skill)
-> 5. **Regenerate views** — Try different angles for better geometry
-> 6. **Done** — Keep this model
+> 3. **Texture/refine/segment** — Improve texture, refine quality, or split parts
+> 4. **Rig/animate** — Check riggability, rig, or retarget animation
+> 5. **Stylize** — Apply LEGO, voxel, Voronoi, or Minecraft style
+> 6. **Send to Blender** — Import via the preferred Blender connector (official first, community fallback; use the 3d-to-blender skill)
+> 7. **Regenerate views** — Try different angles for better geometry
+> 8. **Done** — Keep this model
 
 ## Tips for Best Results
 

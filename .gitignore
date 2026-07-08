@@ -1,6 +1,9 @@
 # Binaries
 /trident-mcp
 *.exe
+*.test
+*.out
+bin/
 dist/
 
 # IDE
@@ -13,6 +16,14 @@ dist/
 
 # Test output
 coverage.out
+cover.out
+
+# AgentReady reports
+.agentready/
+
+# Local agent planning
+docs/superpowers/
+docs/claude-code-manual-test-prompts.md
 
 # Serena
 .serena/
