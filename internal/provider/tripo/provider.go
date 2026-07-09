@@ -20,13 +20,18 @@ import (
 // validTaskID matches Tripo task IDs: alphanumeric, hyphens, underscores.
 var validTaskID = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
-const defaultBaseURL = "https://api.tripo3d.ai/v2/openapi"
+const defaultBaseURL = "https://openapi.tripo3d.ai/v3"
 
 // Compile-time interface satisfaction checks.
 var (
 	_ provider.ModelGenerator     = (*TripoProvider)(nil)
+	_ provider.ImageGenerator     = (*TripoProvider)(nil)
 	_ provider.ModelStatus        = (*TripoProvider)(nil)
 	_ provider.ModelPostProcessor = (*TripoProvider)(nil)
+	_ provider.ModelProcessor     = (*TripoProvider)(nil)
+	_ provider.MeshProcessor      = (*TripoProvider)(nil)
+	_ provider.Animator           = (*TripoProvider)(nil)
+	_ provider.CommonAPI          = (*TripoProvider)(nil)
 	_ provider.ModelLister        = (*TripoProvider)(nil)
 )
 
@@ -49,6 +54,7 @@ type Config struct {
 func NewFromConfig(cfg *config.Config) (*TripoProvider, error) {
 	return New(Config{
 		APIKey:    cfg.Provider.APIKey,
+		BaseURL:   cfg.Provider.BaseURL,
 		OutputDir: cfg.OutputDir,
 	})
 }
@@ -92,26 +98,115 @@ type taskCreateResponse struct {
 }
 
 type taskStatusResponse struct {
-	TaskID          string      `json:"task_id"`
-	Type            string      `json:"type"`
-	Status          string      `json:"status"`
-	Progress        int         `json:"progress"`
-	Output          *taskOutput `json:"output,omitempty"`
-	ErrorCode       *int        `json:"error_code,omitempty"`
-	ErrorMsg        *string     `json:"error_msg,omitempty"`
-	RunningLeftTime *int        `json:"running_left_time,omitempty"`
-	QueuingNum      *int        `json:"queuing_num,omitempty"`
+	TaskID          string          `json:"task_id"`
+	Type            string          `json:"type"`
+	Status          string          `json:"status"`
+	Progress        int             `json:"progress"`
+	Output          *taskOutput     `json:"output,omitempty"`
+	ErrorCode       *int            `json:"error_code,omitempty"`
+	ErrorMsg        *string         `json:"error_msg,omitempty"`
+	Error           *apiErrorDetail `json:"error,omitempty"`
+	RunningLeftTime *int            `json:"running_left_time,omitempty"`
+	QueuingNum      *int            `json:"queuing_num,omitempty"`
+	CreditsConsumed float64         `json:"credits_consumed,omitempty"`
+	CreatedAt       string          `json:"created_at,omitempty"`
+	CompletedAt     string          `json:"completed_at,omitempty"`
 }
 
 type taskOutput struct {
-	Model         string `json:"model,omitempty"`
-	BaseModel     string `json:"base_model,omitempty"`
-	PBRModel      string `json:"pbr_model,omitempty"`
-	RenderedImage string `json:"rendered_image,omitempty"`
+	ModelURL         string         `json:"model_url,omitempty"`
+	BaseModelURL     string         `json:"base_model_url,omitempty"`
+	PBRModelURL      string         `json:"pbr_model_url,omitempty"`
+	RenderedImageURL string         `json:"rendered_image_url,omitempty"`
+	ImageURL         string         `json:"image_url,omitempty"`
+	ImageURLs        []string       `json:"image_urls,omitempty"`
+	ModelURLs        []string       `json:"model_urls,omitempty"`
+	Model            string         `json:"model,omitempty"`
+	BaseModel        string         `json:"base_model,omitempty"`
+	PBRModel         string         `json:"pbr_model,omitempty"`
+	RenderedImage    string         `json:"rendered_image,omitempty"`
+	Extra            map[string]any `json:"-"`
 }
 
 type uploadResponse struct {
+	FileToken  string `json:"file_token"`
 	ImageToken string `json:"image_token"`
+}
+
+type apiErrorDetail struct {
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+func (o *taskOutput) UnmarshalJSON(data []byte) error {
+	type alias taskOutput
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	var parsed alias
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+
+	for _, key := range []string{
+		"model_url",
+		"base_model_url",
+		"pbr_model_url",
+		"rendered_image_url",
+		"image_url",
+		"image_urls",
+		"model_urls",
+		"model",
+		"base_model",
+		"pbr_model",
+		"rendered_image",
+	} {
+		delete(raw, key)
+	}
+	*o = taskOutput(parsed)
+	if len(raw) > 0 {
+		o.Extra = raw
+	}
+	return nil
+}
+
+func (o *taskOutput) providerOutput() *provider.TaskOutput {
+	if o == nil {
+		return nil
+	}
+	return &provider.TaskOutput{
+		ModelURL:         firstNonEmpty(o.ModelURL, o.Model),
+		BaseModelURL:     firstNonEmpty(o.BaseModelURL, o.BaseModel),
+		PBRModelURL:      firstNonEmpty(o.PBRModelURL, o.PBRModel),
+		RenderedImageURL: firstNonEmpty(o.RenderedImageURL, o.RenderedImage),
+		ImageURL:         o.ImageURL,
+		ImageURLs:        append([]string(nil), o.ImageURLs...),
+		ModelURLs:        append([]string(nil), o.ModelURLs...),
+		Extra:            copyStringAnyMap(o.Extra),
+	}
+}
+
+func providerTaskStatus(status taskStatusResponse) provider.ModelTaskStatus {
+	result := provider.ModelTaskStatus{
+		TaskID:          status.TaskID,
+		Type:            status.Type,
+		Status:          status.Status,
+		Progress:        status.Progress,
+		Output:          status.Output.providerOutput(),
+		CreditsConsumed: status.CreditsConsumed,
+		CreatedAt:       status.CreatedAt,
+		CompletedAt:     status.CompletedAt,
+	}
+	if status.ErrorMsg != nil {
+		result.Error = *status.ErrorMsg
+	} else if status.Error != nil && status.Error.Message != "" {
+		result.Error = status.Error.Message
+	}
+	if result.Output != nil {
+		result.RawOutput = result.Output.Extra
+	}
+	return result
 }
 
 // --- Validation helpers ---
@@ -125,6 +220,26 @@ func validateTaskID(taskID string) error {
 		return fmt.Errorf("invalid taskID: must contain only alphanumeric characters, hyphens, and underscores")
 	}
 	return nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func copyStringAnyMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 // --- HTTP helpers ---
@@ -180,9 +295,9 @@ func (p *TripoProvider) doJSON(ctx context.Context, method, path string, body an
 	return &apiResp, nil
 }
 
-// createTask sends a POST /task request and returns the task ID.
-func (p *TripoProvider) createTask(ctx context.Context, body map[string]any) (*provider.ModelOperation, error) {
-	resp, err := p.doJSON(ctx, http.MethodPost, "/task", body)
+// createTask sends a v3 task creation request and returns the task ID.
+func (p *TripoProvider) createTask(ctx context.Context, path string, body map[string]any) (*provider.ModelOperation, error) {
+	resp, err := p.doJSON(ctx, http.MethodPost, path, body)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +339,7 @@ func (p *TripoProvider) uploadFile(ctx context.Context, filePath string) (string
 		return "", fmt.Errorf("finalizing upload body: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/upload", &buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/files", &buf)
 	if err != nil {
 		return "", fmt.Errorf("creating upload request: %w", err)
 	}
@@ -258,9 +373,10 @@ func (p *TripoProvider) uploadFile(ctx context.Context, filePath string) (string
 	if err := json.Unmarshal(apiResp.Data, &uploadResult); err != nil {
 		return "", fmt.Errorf("decoding upload data: %w", err)
 	}
-	if uploadResult.ImageToken == "" {
-		return "", fmt.Errorf("decoding upload data: missing image_token")
+	token := firstNonEmpty(uploadResult.FileToken, uploadResult.ImageToken)
+	if token == "" {
+		return "", fmt.Errorf("decoding upload data: missing file_token")
 	}
 
-	return uploadResult.ImageToken, nil
+	return token, nil
 }

@@ -17,6 +17,10 @@ import (
 func TestTextToModel_Success(t *testing.T) {
 	var captured map[string]any
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/generation/text-to-model" {
+			t.Fatalf("request = %s %s, want POST /generation/text-to-model", r.Method, r.URL.Path)
+		}
+
 		body, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(body, &captured)
 
@@ -38,15 +42,17 @@ func TestTextToModel_Success(t *testing.T) {
 		t.Errorf("Status = %q, want %q", op.Status, "submitted")
 	}
 
-	// Verify request body.
-	if captured["type"] != "text_to_model" {
-		t.Errorf("type = %v, want text_to_model", captured["type"])
+	if _, ok := captured["type"]; ok {
+		t.Errorf("v3 request must not include legacy type field: %v", captured["type"])
 	}
 	if captured["prompt"] != "A red apple" {
 		t.Errorf("prompt = %v, want 'A red apple'", captured["prompt"])
 	}
-	if captured["model_version"] != defaultModelVersion {
-		t.Errorf("model_version = %v, want %v", captured["model_version"], defaultModelVersion)
+	if _, ok := captured["model_version"]; ok {
+		t.Errorf("v3 request must not include legacy model_version field: %v", captured["model_version"])
+	}
+	if captured["model"] != "v3.1-20260211" {
+		t.Errorf("model = %v, want v3.1-20260211", captured["model"])
 	}
 }
 
@@ -74,6 +80,9 @@ func TestTextToModel_WithOptions(t *testing.T) {
 		ModelSeed:       intPtr(22),
 		TextureSeed:     intPtr(33),
 		TextureQuality:  "detailed",
+		Quad:            boolPtr(true),
+		SmartLowPoly:    boolPtr(true),
+		GenerateParts:   boolPtr(true),
 		AutoSize:        boolPtr(true),
 		Compress:        "geometry",
 		ExportUV:        boolPtr(false),
@@ -86,8 +95,11 @@ func TestTextToModel_WithOptions(t *testing.T) {
 	if captured["negative_prompt"] != "blurry" {
 		t.Errorf("negative_prompt = %v, want 'blurry'", captured["negative_prompt"])
 	}
-	if captured["model_version"] != "v3.1-20260211" {
-		t.Errorf("model_version = %v, want 'v3.1-20260211'", captured["model_version"])
+	if _, ok := captured["model_version"]; ok {
+		t.Errorf("v3 request must not include legacy model_version field: %v", captured["model_version"])
+	}
+	if captured["model"] != "v3.1-20260211" {
+		t.Errorf("model = %v, want v3.1-20260211", captured["model"])
 	}
 	if captured["face_limit"] != float64(5000) {
 		t.Errorf("face_limit = %v, want 5000", captured["face_limit"])
@@ -110,6 +122,15 @@ func TestTextToModel_WithOptions(t *testing.T) {
 	if captured["texture_quality"] != "detailed" {
 		t.Errorf("texture_quality = %v, want detailed", captured["texture_quality"])
 	}
+	if captured["quad"] != true {
+		t.Errorf("quad = %v, want true", captured["quad"])
+	}
+	if captured["smart_low_poly"] != true {
+		t.Errorf("smart_low_poly = %v, want true", captured["smart_low_poly"])
+	}
+	if captured["generate_parts"] != true {
+		t.Errorf("generate_parts = %v, want true", captured["generate_parts"])
+	}
 	if captured["auto_size"] != true {
 		t.Errorf("auto_size = %v, want true", captured["auto_size"])
 	}
@@ -124,6 +145,47 @@ func TestTextToModel_WithOptions(t *testing.T) {
 	}
 }
 
+func TestTextToModel_OmitsSmartLowPolyForP1(t *testing.T) {
+	var captured map[string]any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &captured)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"task_id": "txt-task-p1"},
+		})
+	})
+
+	p := newTestProvider(t, handler)
+	_, err := p.TextToModel(context.Background(), provider.TextToModelRequest{
+		Prompt:          "A low poly key",
+		ModelVersion:    "p1",
+		Quad:            boolPtr(true),
+		SmartLowPoly:    boolPtr(true),
+		GenerateParts:   boolPtr(true),
+		GeometryQuality: "detailed",
+	})
+	if err != nil {
+		t.Fatalf("TextToModel: %v", err)
+	}
+
+	if captured["model"] != "P1-20260311" {
+		t.Errorf("model = %v, want P1-20260311", captured["model"])
+	}
+	if _, ok := captured["quad"]; ok {
+		t.Errorf("P1 request must omit unsupported quad field: %v", captured["quad"])
+	}
+	if _, ok := captured["smart_low_poly"]; ok {
+		t.Errorf("P1 request must omit unsupported smart_low_poly field: %v", captured["smart_low_poly"])
+	}
+	if _, ok := captured["generate_parts"]; ok {
+		t.Errorf("P1 request must omit unsupported generate_parts field: %v", captured["generate_parts"])
+	}
+	if _, ok := captured["geometry_quality"]; ok {
+		t.Errorf("P1 request must omit unsupported geometry_quality field: %v", captured["geometry_quality"])
+	}
+}
+
 func TestTextToModel_EmptyPrompt(t *testing.T) {
 	p, _ := New(Config{APIKey: "tsk_test"})
 	_, err := p.TextToModel(context.Background(), TextToModelReq(""))
@@ -135,6 +197,9 @@ func TestTextToModel_EmptyPrompt(t *testing.T) {
 func TestImageToModel_WithURL(t *testing.T) {
 	var captured map[string]any
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/generation/image-to-model" {
+			t.Fatalf("request = %s %s, want POST /generation/image-to-model", r.Method, r.URL.Path)
+		}
 		body, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(body, &captured)
 
@@ -153,15 +218,11 @@ func TestImageToModel_WithURL(t *testing.T) {
 		t.Errorf("TaskID = %q, want %q", op.TaskID, "img-task-1")
 	}
 
-	if captured["type"] != "image_to_model" {
-		t.Errorf("type = %v, want image_to_model", captured["type"])
+	if _, ok := captured["type"]; ok {
+		t.Errorf("v3 request must not include legacy type field: %v", captured["type"])
 	}
-	file := captured["file"].(map[string]any)
-	if file["url"] != "https://example.com/photo.jpg" {
-		t.Errorf("file.url = %v", file["url"])
-	}
-	if file["type"] != "jpg" {
-		t.Errorf("file.type = %v, want jpg", file["type"])
+	if captured["input"] != "https://example.com/photo.jpg" {
+		t.Errorf("input = %v", captured["input"])
 	}
 }
 
@@ -182,9 +243,8 @@ func TestImageToModel_WithURLPreservesFileType(t *testing.T) {
 		t.Fatalf("ImageToModel: %v", err)
 	}
 
-	file := captured["file"].(map[string]any)
-	if file["type"] != "png" {
-		t.Errorf("file.type = %v, want png", file["type"])
+	if captured["input"] != "https://example.com/photo.png?cache=1" {
+		t.Errorf("input = %v", captured["input"])
 	}
 }
 
@@ -193,14 +253,14 @@ func TestImageToModel_WithUpload(t *testing.T) {
 	callCount := 0
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/files", func(w http.ResponseWriter, r *http.Request) {
 		callCount++
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"code": 0,
-			"data": map[string]any{"image_token": "uploaded-token"},
+			"data": map[string]any{"file_token": "file_uploaded-token"},
 		})
 	})
-	mux.HandleFunc("/task", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/generation/image-to-model", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(body, &taskBody)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -225,12 +285,8 @@ func TestImageToModel_WithUpload(t *testing.T) {
 		t.Errorf("upload called %d times, want 1", callCount)
 	}
 
-	file := taskBody["file"].(map[string]any)
-	if file["file_token"] != "uploaded-token" {
-		t.Errorf("file_token = %v", file["file_token"])
-	}
-	if file["type"] != "png" {
-		t.Errorf("file.type = %v, want png", file["type"])
+	if taskBody["input"] != "file_uploaded-token" {
+		t.Errorf("input = %v", taskBody["input"])
 	}
 }
 
@@ -255,6 +311,9 @@ func TestImageToModel_WithAdvancedOptions(t *testing.T) {
 		ModelSeed:          intPtr(42),
 		TextureSeed:        intPtr(99),
 		TextureQuality:     "detailed",
+		Quad:               boolPtr(true),
+		SmartLowPoly:       boolPtr(false),
+		GenerateParts:      boolPtr(true),
 		TextureAlignment:   "geometry",
 		EnableImageAutofix: boolPtr(true),
 		AutoSize:           boolPtr(true),
@@ -266,8 +325,8 @@ func TestImageToModel_WithAdvancedOptions(t *testing.T) {
 		t.Fatalf("ImageToModel: %v", err)
 	}
 
-	if captured["model_version"] != "P1-20260311" {
-		t.Errorf("model_version = %v, want P1-20260311", captured["model_version"])
+	if captured["model"] != "P1-20260311" {
+		t.Errorf("model = %v, want P1-20260311", captured["model"])
 	}
 	if captured["face_limit"] != float64(4000) {
 		t.Errorf("face_limit = %v, want 4000", captured["face_limit"])
@@ -286,6 +345,15 @@ func TestImageToModel_WithAdvancedOptions(t *testing.T) {
 	}
 	if captured["texture_quality"] != "detailed" {
 		t.Errorf("texture_quality = %v, want detailed", captured["texture_quality"])
+	}
+	if _, ok := captured["quad"]; ok {
+		t.Errorf("P1 request must omit unsupported quad field: %v", captured["quad"])
+	}
+	if _, ok := captured["smart_low_poly"]; ok {
+		t.Errorf("P1 request must omit unsupported smart_low_poly field: %v", captured["smart_low_poly"])
+	}
+	if _, ok := captured["generate_parts"]; ok {
+		t.Errorf("P1 request must omit unsupported generate_parts field: %v", captured["generate_parts"])
 	}
 	if captured["texture_alignment"] != "geometry" {
 		t.Errorf("texture_alignment = %v, want geometry", captured["texture_alignment"])
@@ -307,6 +375,44 @@ func TestImageToModel_WithAdvancedOptions(t *testing.T) {
 	}
 }
 
+func TestImageToModel_OmitsSmartLowPolyForP1(t *testing.T) {
+	var captured map[string]any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &captured)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"task_id": "img-task-p1"},
+		})
+	})
+
+	p := newTestProvider(t, handler)
+	_, err := p.ImageToModel(context.Background(), provider.ImageToModelRequest{
+		ImageURL:        "https://example.com/photo.png",
+		ModelVersion:    "P1-20260311",
+		Quad:            boolPtr(true),
+		SmartLowPoly:    boolPtr(true),
+		GenerateParts:   boolPtr(true),
+		GeometryQuality: "detailed",
+	})
+	if err != nil {
+		t.Fatalf("ImageToModel: %v", err)
+	}
+
+	if _, ok := captured["quad"]; ok {
+		t.Errorf("P1 request must omit unsupported quad field: %v", captured["quad"])
+	}
+	if _, ok := captured["smart_low_poly"]; ok {
+		t.Errorf("P1 request must omit unsupported smart_low_poly field: %v", captured["smart_low_poly"])
+	}
+	if _, ok := captured["generate_parts"]; ok {
+		t.Errorf("P1 request must omit unsupported generate_parts field: %v", captured["generate_parts"])
+	}
+	if _, ok := captured["geometry_quality"]; ok {
+		t.Errorf("P1 request must omit unsupported geometry_quality field: %v", captured["geometry_quality"])
+	}
+}
+
 func TestImageToModel_MissingInput(t *testing.T) {
 	p, _ := New(Config{APIKey: "tsk_test"})
 	_, err := p.ImageToModel(context.Background(), ImageToModelReqURL(""))
@@ -318,6 +424,9 @@ func TestImageToModel_MissingInput(t *testing.T) {
 func TestMultiviewToModel_WithURLs(t *testing.T) {
 	var captured map[string]any
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/generation/multiview-to-model" {
+			t.Fatalf("request = %s %s, want POST /generation/multiview-to-model", r.Method, r.URL.Path)
+		}
 		body, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(body, &captured)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -340,19 +449,16 @@ func TestMultiviewToModel_WithURLs(t *testing.T) {
 		t.Errorf("TaskID = %q", op.TaskID)
 	}
 
-	if captured["type"] != "multiview_to_model" {
-		t.Errorf("type = %v", captured["type"])
+	if _, ok := captured["type"]; ok {
+		t.Errorf("v3 request must not include legacy type field: %v", captured["type"])
 	}
-	files := captured["files"].([]any)
-	if len(files) != 4 {
-		t.Errorf("files count = %d, want 4", len(files))
+	inputs := captured["inputs"].([]any)
+	if len(inputs) != 3 {
+		t.Errorf("inputs count = %d, want 3", len(inputs))
 	}
-	if files[1].(map[string]any)["type"] != "jpg" {
-		t.Errorf("files[1].type = %v, want jpg", files[1].(map[string]any)["type"])
-	}
-	if len(files[3].(map[string]any)) != 0 {
-		t.Errorf("files[3] = %v, want empty placeholder", files[3])
-	}
+	assertMultiviewInput(t, inputs, 0, "front", "https://example.com/front.jpg")
+	assertMultiviewInput(t, inputs, 1, "left", "https://example.com/side.jpg")
+	assertMultiviewInput(t, inputs, 2, "back", "https://example.com/back.jpg")
 }
 
 func TestMultiviewToModel_WithURLsPreservesFileTypes(t *testing.T) {
@@ -375,16 +481,62 @@ func TestMultiviewToModel_WithURLsPreservesFileTypes(t *testing.T) {
 		t.Fatalf("MultiviewToModel: %v", err)
 	}
 
-	files := captured["files"].([]any)
-	if files[0].(map[string]any)["type"] != "png" {
-		t.Errorf("files[0].type = %v, want png", files[0].(map[string]any)["type"])
+	inputs := captured["inputs"].([]any)
+	if len(inputs) != 2 {
+		t.Errorf("inputs count = %d, want 2", len(inputs))
 	}
-	if files[1].(map[string]any)["type"] != "webp" {
-		t.Errorf("files[1].type = %v, want webp", files[1].(map[string]any)["type"])
+	assertMultiviewInput(t, inputs, 0, "front", "https://example.com/front.png")
+	assertMultiviewInput(t, inputs, 1, "left", "https://example.com/side.webp")
+}
+
+func TestMultiviewToModel_WithUploadsUsesViewKeyInputs(t *testing.T) {
+	var taskBody map[string]any
+	uploadCount := 0
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/files", func(w http.ResponseWriter, r *http.Request) {
+		uploadCount++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"file_token": "file_view_" + string(rune('0'+uploadCount))},
+		})
+	})
+	mux.HandleFunc("/generation/multiview-to-model", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &taskBody)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"task_id": "mv-task-upload"},
+		})
+	})
+
+	dir := t.TempDir()
+	front := filepath.Join(dir, "front.png")
+	left := filepath.Join(dir, "left.png")
+	if err := os.WriteFile(front, []byte("front"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
 	}
-	if len(files) != 4 {
-		t.Errorf("files count = %d, want 4", len(files))
+	if err := os.WriteFile(left, []byte("left"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
 	}
+
+	p := newTestProvider(t, mux)
+	_, err := p.MultiviewToModel(context.Background(), provider.MultiviewToModelRequest{
+		ImagePaths: []string{front, left},
+	})
+	if err != nil {
+		t.Fatalf("MultiviewToModel: %v", err)
+	}
+	if uploadCount != 2 {
+		t.Fatalf("upload count = %d, want 2", uploadCount)
+	}
+
+	inputs := taskBody["inputs"].([]any)
+	if len(inputs) != 2 {
+		t.Fatalf("inputs count = %d, want 2", len(inputs))
+	}
+	assertMultiviewInput(t, inputs, 0, "front", "file_view_1")
+	assertMultiviewInput(t, inputs, 1, "left", "file_view_2")
 }
 
 func TestMultiviewToModel_WithP1AndAdvancedOptions(t *testing.T) {
@@ -412,6 +564,9 @@ func TestMultiviewToModel_WithP1AndAdvancedOptions(t *testing.T) {
 		ModelSeed:          intPtr(7),
 		TextureSeed:        intPtr(8),
 		TextureQuality:     "detailed",
+		Quad:               boolPtr(true),
+		SmartLowPoly:       boolPtr(false),
+		GenerateParts:      boolPtr(true),
 		TextureAlignment:   "geometry",
 		EnableImageAutofix: boolPtr(true),
 		AutoSize:           boolPtr(true),
@@ -423,8 +578,8 @@ func TestMultiviewToModel_WithP1AndAdvancedOptions(t *testing.T) {
 		t.Fatalf("MultiviewToModel: %v", err)
 	}
 
-	if captured["model_version"] != "P1-20260311" {
-		t.Errorf("model_version = %v, want P1-20260311", captured["model_version"])
+	if captured["model"] != "P1-20260311" {
+		t.Errorf("model = %v, want P1-20260311", captured["model"])
 	}
 	if captured["face_limit"] != float64(6000) {
 		t.Errorf("face_limit = %v, want 6000", captured["face_limit"])
@@ -443,6 +598,15 @@ func TestMultiviewToModel_WithP1AndAdvancedOptions(t *testing.T) {
 	}
 	if captured["texture_quality"] != "detailed" {
 		t.Errorf("texture_quality = %v, want detailed", captured["texture_quality"])
+	}
+	if _, ok := captured["quad"]; ok {
+		t.Errorf("P1 request must omit unsupported quad field: %v", captured["quad"])
+	}
+	if _, ok := captured["smart_low_poly"]; ok {
+		t.Errorf("P1 request must omit unsupported smart_low_poly field: %v", captured["smart_low_poly"])
+	}
+	if _, ok := captured["generate_parts"]; ok {
+		t.Errorf("P1 request must omit unsupported generate_parts field: %v", captured["generate_parts"])
 	}
 	if captured["texture_alignment"] != "geometry" {
 		t.Errorf("texture_alignment = %v, want geometry", captured["texture_alignment"])
@@ -463,21 +627,87 @@ func TestMultiviewToModel_WithP1AndAdvancedOptions(t *testing.T) {
 		t.Errorf("export_uv = %v, want false", captured["export_uv"])
 	}
 
-	files := captured["files"].([]any)
-	if len(files) != 4 {
-		t.Fatalf("files count = %d, want 4", len(files))
+	inputs := captured["inputs"].([]any)
+	if len(inputs) != 3 {
+		t.Fatalf("inputs count = %d, want 3", len(inputs))
 	}
-	if files[0].(map[string]any)["type"] != "png" {
-		t.Errorf("files[0].type = %v, want png", files[0].(map[string]any)["type"])
+	assertMultiviewInput(t, inputs, 0, "front", "https://example.com/front.png")
+	assertMultiviewInput(t, inputs, 1, "left", "https://example.com/left.webp")
+	assertMultiviewInput(t, inputs, 2, "back", "https://example.com/back.jpg")
+}
+
+func TestMultiviewToModel_OmitsSmartLowPolyForP1(t *testing.T) {
+	var captured map[string]any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &captured)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"task_id": "mv-task-p1-smart"},
+		})
+	})
+
+	p := newTestProvider(t, handler)
+	_, err := p.MultiviewToModel(context.Background(), provider.MultiviewToModelRequest{
+		ImageURLs: []string{
+			"https://example.com/front.png",
+			"https://example.com/left.png",
+		},
+		ModelVersion:    "p1",
+		Quad:            boolPtr(true),
+		SmartLowPoly:    boolPtr(true),
+		GenerateParts:   boolPtr(true),
+		GeometryQuality: "detailed",
+	})
+	if err != nil {
+		t.Fatalf("MultiviewToModel: %v", err)
 	}
-	if files[1].(map[string]any)["type"] != "webp" {
-		t.Errorf("files[1].type = %v, want webp", files[1].(map[string]any)["type"])
+
+	if _, ok := captured["quad"]; ok {
+		t.Errorf("P1 request must omit unsupported quad field: %v", captured["quad"])
 	}
-	if files[2].(map[string]any)["type"] != "jpg" {
-		t.Errorf("files[2].type = %v, want jpg", files[2].(map[string]any)["type"])
+	if _, ok := captured["smart_low_poly"]; ok {
+		t.Errorf("P1 request must omit unsupported smart_low_poly field: %v", captured["smart_low_poly"])
 	}
-	if len(files[3].(map[string]any)) != 0 {
-		t.Errorf("files[3] = %v, want empty placeholder", files[3])
+	if _, ok := captured["generate_parts"]; ok {
+		t.Errorf("P1 request must omit unsupported generate_parts field: %v", captured["generate_parts"])
+	}
+	if _, ok := captured["geometry_quality"]; ok {
+		t.Errorf("P1 request must omit unsupported geometry_quality field: %v", captured["geometry_quality"])
+	}
+}
+
+func TestMultiviewToModel_WithTaskID(t *testing.T) {
+	var captured map[string]any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/generation/multiview-to-model" {
+			t.Fatalf("request = %s %s, want POST /generation/multiview-to-model", r.Method, r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &captured)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{"task_id": "mv-task-from-task"},
+		})
+	})
+
+	p := newTestProvider(t, handler)
+	_, err := p.MultiviewToModel(context.Background(), provider.MultiviewToModelRequest{
+		TaskID:       "multiview-task-123",
+		ModelVersion: "v3.1",
+		Texture:      boolPtr(true),
+	})
+	if err != nil {
+		t.Fatalf("MultiviewToModel: %v", err)
+	}
+
+	inputs := captured["inputs"].([]any)
+	if len(inputs) != 1 {
+		t.Fatalf("inputs count = %d, want 1", len(inputs))
+	}
+	taskInput := inputs[0].(map[string]any)
+	if taskInput["task_id"] != "multiview-task-123" {
+		t.Errorf("task_id = %v, want multiview-task-123", taskInput["task_id"])
 	}
 }
 
@@ -518,6 +748,20 @@ func TestMultiviewToModel_BothPathsAndURLs(t *testing.T) {
 	}
 }
 
+func TestMultiviewToModel_TaskIDMutuallyExclusive(t *testing.T) {
+	p, _ := New(Config{APIKey: "tsk_test"})
+	_, err := p.MultiviewToModel(context.Background(), provider.MultiviewToModelRequest{
+		TaskID:    "multiview-task-123",
+		ImageURLs: []string{"https://example.com/front.png", "https://example.com/left.png"},
+	})
+	if err == nil {
+		t.Fatal("expected error for mixed task ID and URL inputs")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("error %q doesn't mention mutual exclusivity", err)
+	}
+}
+
 func TestMultiviewToModel_UnsupportedVersion(t *testing.T) {
 	p, _ := New(Config{APIKey: "tsk_test"})
 	req := MultiviewToModelReqURLs([]string{"https://a.jpg", "https://b.jpg"})
@@ -533,7 +777,7 @@ func TestMultiviewToModel_UnsupportedVersion(t *testing.T) {
 
 func TestStatus_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/task/task-abc" {
+		if r.URL.Path != "/tasks/task-abc" {
 			http.Error(w, "wrong path", http.StatusBadRequest)
 			return
 		}
@@ -543,6 +787,13 @@ func TestStatus_Success(t *testing.T) {
 				"task_id":  "task-abc",
 				"status":   "running",
 				"progress": 50,
+				"output": map[string]any{
+					"model_url":          "https://cdn.example/model.glb",
+					"rendered_image_url": "https://cdn.example/render.png",
+					"extra_url":          "https://cdn.example/extra.bin",
+				},
+				"credits_consumed": 3,
+				"created_at":       "2026-07-08T10:00:00Z",
 			},
 		})
 	})
@@ -560,6 +811,44 @@ func TestStatus_Success(t *testing.T) {
 	}
 	if status.Progress != 50 {
 		t.Errorf("Progress = %d, want 50", status.Progress)
+	}
+	if status.Output == nil {
+		t.Fatal("Output is nil, want v3 task output")
+	}
+	if status.Output.ModelURL != "https://cdn.example/model.glb" {
+		t.Errorf("Output.ModelURL = %q", status.Output.ModelURL)
+	}
+	if status.CreditsConsumed != 3 {
+		t.Errorf("CreditsConsumed = %v, want 3", status.CreditsConsumed)
+	}
+	if status.CreatedAt != "2026-07-08T10:00:00Z" {
+		t.Errorf("CreatedAt = %q", status.CreatedAt)
+	}
+	if status.Output.Extra["extra_url"] == nil {
+		t.Errorf("Output.Extra missing extra_url: %#v", status.Output.Extra)
+	}
+}
+
+func TestStatus_DecimalCreditsConsumed(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{
+				"task_id":          "task-credits",
+				"status":           "success",
+				"progress":         100,
+				"credits_consumed": 5.25,
+			},
+		})
+	})
+
+	p := newTestProvider(t, handler)
+	status, err := p.Status(context.Background(), "task-credits")
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if status.CreditsConsumed != 5.25 {
+		t.Errorf("CreditsConsumed = %v, want 5.25", status.CreditsConsumed)
 	}
 }
 
@@ -724,6 +1013,72 @@ func TestDownload_DetectsActualFormatFromTaskOutput(t *testing.T) {
 	}
 }
 
+func TestDownload_UsesModelURLsOutput(t *testing.T) {
+	fileSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("animated-glb"))
+	}))
+	defer fileSrv.Close()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{
+				"task_id":  "dl-task-model-urls",
+				"status":   "success",
+				"progress": 100,
+				"output": map[string]any{
+					"model_urls": []string{fileSrv.URL + "/animated.glb"},
+				},
+			},
+		})
+	})
+
+	p := newTestProvider(t, handler)
+	result, err := p.Download(context.Background(), "dl-task-model-urls", "")
+	if err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	if result.Format != "GLTF" {
+		t.Errorf("Format = %q, want GLTF", result.Format)
+	}
+}
+
+func TestDownload_SelectsRequestedFormatFromModelURLs(t *testing.T) {
+	fileSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/animated.fbx" {
+			t.Fatalf("download path = %s, want /animated.fbx", r.URL.Path)
+		}
+		_, _ = w.Write([]byte("animated-fbx"))
+	}))
+	defer fileSrv.Close()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": 0,
+			"data": map[string]any{
+				"task_id":  "dl-task-model-urls-format",
+				"status":   "success",
+				"progress": 100,
+				"output": map[string]any{
+					"model_urls": []string{
+						fileSrv.URL + "/animated.glb",
+						fileSrv.URL + "/animated.fbx",
+					},
+				},
+			},
+		})
+	})
+
+	p := newTestProvider(t, handler)
+	result, err := p.Download(context.Background(), "dl-task-model-urls-format", "FBX")
+	if err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	if result.Format != "FBX" {
+		t.Errorf("Format = %q, want FBX", result.Format)
+	}
+}
+
 func TestDownload_DetectsFormatFromResponseHeaders(t *testing.T) {
 	fileSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Disposition", `attachment; filename="mesh.obj"`)
@@ -884,6 +1239,24 @@ func ImageToModelReqPath(path string) provider.ImageToModelRequest {
 
 func MultiviewToModelReqURLs(urls []string) provider.MultiviewToModelRequest {
 	return provider.MultiviewToModelRequest{ImageURLs: urls}
+}
+
+func assertMultiviewInput(t *testing.T, inputs []any, index int, view string, want string) {
+	t.Helper()
+	if index >= len(inputs) {
+		t.Fatalf("inputs[%d] missing from %#v", index, inputs)
+	}
+	item, ok := inputs[index].(map[string]any)
+	if !ok {
+		t.Fatalf("inputs[%d] = %#v, want view-key object", index, inputs[index])
+	}
+	got, ok := item[view]
+	if !ok {
+		t.Fatalf("inputs[%d] missing view %q: %#v", index, view, item)
+	}
+	if got != want {
+		t.Errorf("inputs[%d][%q] = %v, want %s", index, view, got, want)
+	}
 }
 
 func boolPtr(v bool) *bool {

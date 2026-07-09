@@ -1,6 +1,6 @@
 ---
 name: 3d-to-blender
-description: Import 3D models into Blender and set up scenes. Prefer the official Blender connector / Blender Lab MCP server when available, and fall back to the community blender-mcp server if needed. Use when the user wants to import a generated 3D model into Blender, set up a scene, adjust materials, configure rendering, or do any Blender-related work with a trident-mcp generated model. Triggers on "import to Blender", "send to Blender", "open in Blender", "set up Blender scene", "render this model".
+description: Use when the user wants to import a generated, converted, rigged, animated, or local 3D model into Blender; set up a scene; inspect materials; adjust lighting; or render a trident-mcp output.
 ---
 
 # 3D to Blender Skill
@@ -54,9 +54,12 @@ Guide the user toward the official connector first:
 
 Identify which model to import:
 
-- **From recent generation**: If we just generated a model in this conversation, use that file path
+- **From recent generation**: If we just generated and downloaded a model in this conversation, use that file path
+- **From task ID**: Use `task_status` or `get_task` to confirm success, then `download_model` to get a local file path
 - **User provides path**: User specifies a path to a .glb, .fbx, .obj, or other supported format
 - **From output directory**: List recent files in the model output directory
+- **Needs a different format**: Use `convert_format` first, poll the conversion task, then `download_model`
+- **Rigged or animated output**: Import the result from `rig_model` or `retarget_animation`; prefer GLB or FBX for skeletons/animation
 
 ### Phase 2: Import Model
 
@@ -81,6 +84,9 @@ bpy.ops.wm.obj_import(filepath="/path/to/model.obj")
 ```python
 bpy.ops.wm.stl_import(filepath="/path/to/model.stl")
 ```
+
+**USDZ / 3MF:**
+Blender support varies by version and add-ons. If import fails, use `convert_format` in trident-mcp to produce GLTF/GLB, FBX, OBJ, or STL first.
 
 After import, select the imported object and center it at origin:
 ```python
@@ -164,7 +170,8 @@ If screenshot tools are unavailable but Blender summary tools are available, use
 > 3. **Adjust lighting** — Change light positions, intensity, or color
 > 4. **Configure rendering** — Set up Cycles or EEVEE render settings
 > 5. **Render** — Render a final image
-> 6. **Done** — Scene is ready
+> 6. **Inspect rig/animation** — Review armature, animation clips, or retargeted motion if present
+> 7. **Done** — Scene is ready
 
 ## Tips
 
@@ -174,3 +181,5 @@ If screenshot tools are unavailable but Blender summary tools are available, use
 - Use EEVEE for quick previews, Cycles for final renders
 - The three-point lighting setup works well for most product-style renders
 - If the model appears too large or small, scale uniformly (S key in Blender, or via script)
+- Tripo P1 and retopologized outputs are usually easier to inspect in Blender than very dense meshes
+- For animated assets, verify that the armature, actions, and timeline range imported before setting up final render cameras

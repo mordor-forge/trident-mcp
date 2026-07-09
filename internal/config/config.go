@@ -19,7 +19,8 @@ type Config struct {
 
 // ProviderConfig holds Tripo API authentication.
 type ProviderConfig struct {
-	APIKey string
+	APIKey  string
+	BaseURL string
 }
 
 // Load reads configuration from environment variables.
@@ -27,7 +28,8 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		OutputDir: envOr("MODEL_OUTPUT_DIR", defaultOutputDir()),
 		Provider: ProviderConfig{
-			APIKey: os.Getenv("TRIPO_API_KEY"),
+			APIKey:  os.Getenv("TRIPO_API_KEY"),
+			BaseURL: os.Getenv("TRIPO_BASE_URL"),
 		},
 	}
 

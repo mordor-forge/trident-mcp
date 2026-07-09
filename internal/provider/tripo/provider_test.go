@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -32,11 +31,20 @@ func newTestProvider(t *testing.T, handler http.Handler) *TripoProvider {
 	return p
 }
 
-// taskCreatedHandler returns a handler that expects a POST /task and returns a task ID.
+// taskCreatedHandler returns a handler that expects a v3 task-creation endpoint
+// and returns a task ID.
 func taskCreatedHandler(wantType string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/task" {
-			http.Error(w, "unexpected request", http.StatusBadRequest)
+		wantPath := map[string]string{
+			"convert_model": "/models/convert",
+			"stylize_model": "/models/stylize",
+		}[wantType]
+		if wantPath == "" {
+			http.Error(w, fmt.Sprintf("test helper has no endpoint for %q", wantType), http.StatusBadRequest)
+			return
+		}
+		if r.Method != http.MethodPost || r.URL.Path != wantPath {
+			http.Error(w, fmt.Sprintf("unexpected request %s %s", r.Method, r.URL.Path), http.StatusBadRequest)
 			return
 		}
 
@@ -44,15 +52,6 @@ func taskCreatedHandler(wantType string) http.HandlerFunc {
 		auth := r.Header.Get("Authorization")
 		if auth != "Bearer tsk_test-key" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		body, _ := io.ReadAll(r.Body)
-		var req map[string]any
-		_ = json.Unmarshal(body, &req)
-
-		if reqType, ok := req["type"].(string); !ok || reqType != wantType {
-			http.Error(w, fmt.Sprintf("expected type %q, got %v", wantType, req["type"]), http.StatusBadRequest)
 			return
 		}
 
@@ -95,8 +94,9 @@ func TestNew_DefaultBaseURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if p.baseURL != defaultBaseURL {
-		t.Errorf("baseURL = %q, want %q", p.baseURL, defaultBaseURL)
+	const want = "https://openapi.tripo3d.ai/v3"
+	if p.baseURL != want {
+		t.Errorf("baseURL = %q, want %q", p.baseURL, want)
 	}
 }
 
@@ -120,34 +120,69 @@ func TestListModels(t *testing.T) {
 		t.Fatal("expected at least one model")
 	}
 
-	// Check that the latest H3 entry is present.
+	// Check that the latest H-series entry is present.
 	found := false
 	for _, m := range models {
-		if m.ID == "v3.1" {
+		if m.ID == "v3.1-20260211" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("v3.1 model not found in list")
+		t.Error("v3.1-20260211 model not found in list")
 	}
 
 	// Check that P1 advertises multiview support.
 	found = false
 	for _, m := range models {
-		if m.ID != "p1" {
+		if m.ID != "P1-20260311" {
 			continue
 		}
 		found = true
 		if len(m.Capabilities) != 3 {
-			t.Fatalf("p1 capabilities = %v, want text/image/multiview", m.Capabilities)
+			t.Fatalf("P1-20260311 capabilities = %v, want text/image/multiview", m.Capabilities)
 		}
 		if got := strings.Join(m.Capabilities, ","); !strings.Contains(got, "multiview_to_3d") {
-			t.Errorf("p1 capabilities = %v, want multiview_to_3d", m.Capabilities)
+			t.Errorf("P1-20260311 capabilities = %v, want multiview_to_3d", m.Capabilities)
 		}
 	}
 	if !found {
-		t.Error("p1 model not found in list")
+		t.Error("P1-20260311 model not found in list")
+	}
+
+	foundImage := false
+	foundRig := false
+	foundLegacyRig := false
+	for _, m := range models {
+		switch m.ID {
+		case "seedream_v5":
+			foundImage = true
+			if m.Namespace != "image_generation" {
+				t.Errorf("seedream_v5 namespace = %q", m.Namespace)
+			}
+		case "rig-v2.0":
+			foundRig = true
+			if m.Namespace != "animation" {
+				t.Errorf("rig-v2.0 namespace = %q", m.Namespace)
+			}
+			if !m.Default {
+				t.Error("rig-v2.0 should be the default animation model")
+			}
+		case "rig-v1.0":
+			foundLegacyRig = true
+			if m.Default {
+				t.Error("rig-v1.0 should not be the default animation model")
+			}
+		}
+	}
+	if !foundImage {
+		t.Error("seedream_v5 image model not found in list")
+	}
+	if !foundRig {
+		t.Error("rig-v2.0 animation model not found in list")
+	}
+	if !foundLegacyRig {
+		t.Error("rig-v1.0 animation model not found in list")
 	}
 }
 
@@ -195,7 +230,7 @@ func TestDoJSON_NonZeroCode(t *testing.T) {
 
 func TestUploadFile(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/upload" {
+		if r.URL.Path != "/files" {
 			http.Error(w, "wrong path", http.StatusBadRequest)
 			return
 		}
@@ -223,7 +258,7 @@ func TestUploadFile(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"code": 0,
 			"data": map[string]any{
-				"image_token": "token-abc-123",
+				"file_token": "file_abc-123",
 			},
 		})
 	}))
@@ -239,8 +274,8 @@ func TestUploadFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("uploadFile: %v", err)
 	}
-	if token != "token-abc-123" {
-		t.Errorf("token = %q, want %q", token, "token-abc-123")
+	if token != "file_abc-123" {
+		t.Errorf("token = %q, want %q", token, "file_abc-123")
 	}
 }
 
@@ -283,7 +318,7 @@ func TestCreateTask_MissingTaskID(t *testing.T) {
 		})
 	}))
 
-	_, err := p.createTask(context.Background(), map[string]any{"type": "text_to_model"})
+	_, err := p.createTask(context.Background(), "/generation/text-to-model", map[string]any{"prompt": "test"})
 	if err == nil {
 		t.Fatal("expected error for missing task_id")
 	}
