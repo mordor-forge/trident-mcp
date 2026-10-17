@@ -6,7 +6,7 @@
 
 ## Invariants
 
-- **Field names.** Request structs' `json` tags are both the MCP argument names and Tripo's payload keys. The only translations are explicit `wire` functions on an Operation (today only multiview `inputs`).
+- **Field names.** Request structs' `json` tags are both the MCP argument names and Tripo's payload keys. The only translations are explicit `wire` functions on an Operation: multiview `inputs` become Tripo's array form, and `texture: false` with `pbr` unset also sends `pbr: false`.
 - **Local first.** Every local check runs before any upload or credit-spending call: the schema, required fields, cross-field `check`s, and catalog rejections.
 - **Retries.** Only HTTP 429 is retried, honouring `Retry-After`. 5xx responses and timeouts on create calls are never retried, because Tripo may already have billed them.
 - **Model versions.** A request's `model` is resolved per Operation. An alias becomes its ID, a missing model becomes the Operation's `DefaultFor` version, and fields in the version's `Rejects` are dropped when zero and refused when set. Unknown versions are sent as-is with a warning.
