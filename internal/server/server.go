@@ -91,7 +91,9 @@ func text(format string) *mcp.CallToolResult {
 func boolPtr(b bool) *bool { return &b }
 
 var (
-	creditSpending = &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(true)}
+	// Spent credits cannot be taken back, so hosts that confirm destructive
+	// calls should confirm these.
+	creditSpending = &mcp.ToolAnnotations{DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(true)}
 	readOnly       = &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPtr(true)}
 	savesFiles     = &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(true)}
 )

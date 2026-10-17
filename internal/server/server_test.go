@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -109,6 +110,13 @@ func TestServer_ListsTheWholeSurface(t *testing.T) {
 		got = append(got, tool.Name)
 		if tool.Description == "" || tool.Annotations == nil {
 			t.Errorf("%s lacks a description or annotations", tool.Name)
+		}
+	}
+	for _, tool := range res.Tools {
+		spends := slices.Contains(operationTools, tool.Name)
+		destructive := tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint
+		if !tool.Annotations.ReadOnlyHint && spends != destructive {
+			t.Errorf("%s: destructiveHint %v, but credit-spending is %v", tool.Name, destructive, spends)
 		}
 	}
 	want := append(append([]string(nil), operationTools...), otherTools...)
