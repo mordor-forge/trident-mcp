@@ -102,6 +102,13 @@ func (op Operation[R]) encode(req *R) (map[string]any, string, []string, error) 
 	if err := resolved.Validate(body); err != nil {
 		return nil, "", nil, fmt.Errorf("tripo: invalid %s request: %w", op.Name, err)
 	}
+	for _, field := range taskRefFields(reflect.TypeFor[R]()) {
+		if id, _ := body[field].(string); id != "" {
+			if err := checkTaskID(id); err != nil {
+				return nil, "", nil, fmt.Errorf("tripo: invalid %s request: %s takes a task ID: %w", op.Name, field, err)
+			}
+		}
+	}
 	for _, field := range requiredStrings(reflect.TypeFor[R]()) {
 		if s, _ := body[field].(string); strings.TrimSpace(s) == "" {
 			return nil, "", nil, fmt.Errorf("tripo: invalid %s request: %s is required", op.Name, field)
@@ -163,6 +170,18 @@ func catalogFields(t reflect.Type) map[string]string {
 		if op := field.Tag.Get("catalog"); op != "" {
 			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 			fields[name] = op
+		}
+	}
+	return fields
+}
+
+// taskRefFields lists the top-level TaskRef fields of t by JSON name.
+func taskRefFields(t reflect.Type) []string {
+	var fields []string
+	for _, field := range reflect.VisibleFields(t) {
+		if field.Type == reflect.TypeFor[TaskRef]() {
+			name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+			fields = append(fields, name)
 		}
 	}
 	return fields

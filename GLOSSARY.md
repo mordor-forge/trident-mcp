@@ -31,6 +31,9 @@ _Avoid_: download, asset file
 A reference to something an Operation consumes: a local file path, a public URL, a file token or a task ID.
 _Avoid_: source, image (when the Input could be a model)
 
+**Task reference**:
+An Input that can only be the task ID of an earlier Task, such as the rig task a retarget runs on.
+
 **File token**:
 Tripo's handle for a file uploaded to it, accepted anywhere an Input is.
 

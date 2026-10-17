@@ -10,7 +10,7 @@
 - **Local first.** Every local check runs before any upload or credit-spending call: the schema, required fields, cross-field `check`s, and catalog rejections.
 - **Retries.** Only HTTP 429 is retried, honouring `Retry-After`. 5xx responses and timeouts on create calls are never retried, because Tripo may already have billed them.
 - **Model versions.** A request's `model` is resolved per Operation. An alias becomes its ID, a missing model becomes the Operation's `DefaultFor` version, and fields in the version's `Rejects` are dropped when zero and refused when set. Unknown versions are sent as-is with a warning.
-- **Inputs.** Local-path Inputs are uploaded once per call, and only for image and mesh extensions. URLs, file tokens and task IDs pass through untouched.
+- **Inputs.** Local-path Inputs are uploaded once per call, and only for image and mesh extensions. URLs, file tokens and task IDs pass through untouched. `TaskRef` fields accept only task IDs and are never uploaded.
 - **Task IDs.** IDs used in URL paths must match `^[A-Za-z0-9_-]{1,128}$`.
 - **Outputs.** `Task.Output` stays Tripo's raw map. Every string field ending in `_url` (nested ones too) is a downloadable Artifact named after the field.
 - **Downloads.** `Download` re-fetches the Task first, requires `success`, writes `<dir>/<task_id>/<name>.<ext>` through a temporary file, and never leaves partial files behind.

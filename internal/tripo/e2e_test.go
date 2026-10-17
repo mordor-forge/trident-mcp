@@ -187,7 +187,7 @@ func TestE2E_SpendingLifecycle(t *testing.T) {
 		}()
 	}
 	r.wait("rig_model", rig)
-	retarget := mustSubmit(t, c, tripo.RetargetAnimation, tripo.RetargetAnimationRequest{Input: tripo.Input(rig), Animation: "preset:walk"})
+	retarget := mustSubmit(t, c, tripo.RetargetAnimation, tripo.RetargetAnimationRequest{Input: tripo.TaskRef(rig), Animation: "preset:walk"})
 	r.wait("retarget_animation", retarget)
 	r.download("retarget_animation", retarget)
 	wg.Wait()

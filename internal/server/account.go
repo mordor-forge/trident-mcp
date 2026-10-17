@@ -49,7 +49,7 @@ func (s *Server) registerAccountTools() {
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "upload_file",
 		Description: "Upload a local image or model to Tripo and get a reusable file token. Rarely needed: every input field already accepts local paths.",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(true)},
+		Annotations: sendsToTripo,
 	}, s.handleUpload)
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "list_models",

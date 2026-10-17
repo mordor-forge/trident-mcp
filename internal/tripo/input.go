@@ -42,6 +42,10 @@ var multipartFormats = map[string]bool{
 	"glb": true, "gltf": true, "fbx": true, "obj": true, "stl": true,
 }
 
+// TaskRef is a field that only accepts the ID of an earlier Task. Unlike an
+// Input it is never uploaded; Submit checks its shape locally.
+type TaskRef string
+
 func isHTTPURL(s string) bool {
 	return strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://")
 }

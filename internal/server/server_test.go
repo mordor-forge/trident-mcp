@@ -113,10 +113,11 @@ func TestServer_ListsTheWholeSurface(t *testing.T) {
 		}
 	}
 	for _, tool := range res.Tools {
-		spends := slices.Contains(operationTools, tool.Name) && tool.Name != "rig_check"
+		// Tools that spend credits or upload local files must ask for confirmation.
+		sends := slices.Contains(operationTools, tool.Name) || tool.Name == "upload_file"
 		destructive := tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint
-		if !tool.Annotations.ReadOnlyHint && spends != destructive {
-			t.Errorf("%s: destructiveHint %v, but credit-spending is %v", tool.Name, destructive, spends)
+		if !tool.Annotations.ReadOnlyHint && sends != destructive {
+			t.Errorf("%s: destructiveHint %v, but sends credits or files to Tripo: %v", tool.Name, destructive, sends)
 		}
 	}
 	want := append(append([]string(nil), operationTools...), otherTools...)

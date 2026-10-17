@@ -273,6 +273,26 @@ func TestSubmit_RejectsInvalidRequestsLocally(t *testing.T) {
 			_, err := tripo.TextToImage.Submit(ctx, c, tripo.TextToImageRequest{Prompt: "x", Watermark: ptr(true), ImageOptions: tripo.ImageOptions{Model: "banana"}})
 			return err
 		},
+		"delight without texture v3.5": func() error {
+			_, err := tripo.TextToModel.Submit(ctx, c, tripo.TextToModelRequest{Prompt: "x", GenerationOptions: tripo.GenerationOptions{Delight: ptr(false)}})
+			return err
+		},
+		"pbr on with texture off": func() error {
+			_, err := tripo.TextToModel.Submit(ctx, c, tripo.TextToModelRequest{Prompt: "x", GenerationOptions: tripo.GenerationOptions{Texture: ptr(false), PBR: ptr(true)}})
+			return err
+		},
+		"P1 over its face budget": func() error {
+			_, err := tripo.TextToModel.Submit(ctx, c, tripo.TextToModelRequest{Prompt: "x", GenerationOptions: tripo.GenerationOptions{Model: "p1", FaceLimit: ptr(30000)}})
+			return err
+		},
+		"P2 quads over 25k": func() error {
+			_, err := tripo.TextToModel.Submit(ctx, c, tripo.TextToModelRequest{Prompt: "x", GenerationOptions: tripo.GenerationOptions{Model: "p2", Quad: ptr(true), FaceLimit: ptr(40000)}})
+			return err
+		},
+		"local path for a task-only input": func() error {
+			_, err := tripo.CompleteMesh.Submit(ctx, c, tripo.CompleteMeshRequest{Input: "/home/me/mesh.glb"})
+			return err
+		},
 		"spec on a quadruped rig": func() error {
 			_, err := tripo.RigModel.Submit(ctx, c, tripo.RigModelRequest{Input: "task-mesh", Model: "v2.5", RigType: "quadruped", Spec: "mixamo"})
 			return err
@@ -297,6 +317,27 @@ func writeFile(t *testing.T, name string, size int) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func TestSubmit_TextureOffTurnsPBROff(t *testing.T) {
+	fake := tripotest.New(t)
+	submit(t, fake, tripo.TextToModel, tripo.TextToModelRequest{Prompt: "x", GenerationOptions: tripo.GenerationOptions{Texture: ptr(false)}})
+	assertBody(t, fake.Last(t, "/generation/text-to-model").Body, map[string]any{"texture": false, "pbr": false})
+
+	submit(t, fake, tripo.TextToModel, tripo.TextToModelRequest{Prompt: "x", GenerationOptions: tripo.GenerationOptions{Model: "p2", FaceLimit: ptr(40000)}})
+	assertBody(t, fake.Last(t, "/generation/text-to-model").Body, map[string]any{"face_limit": 40000.0})
+}
+
+func TestImportModel_RefusesFormatsItCannotImport(t *testing.T) {
+	fake := tripotest.New(t)
+	_, err := tripo.ImportModel.Submit(context.Background(), fake.Client(t), tripo.ImportModelRequest{Input: tripo.Input(writeFile(t, "scene.usdz", 64))})
+	if err == nil || !strings.Contains(err.Error(), "scene.usdz") {
+		t.Fatalf("err = %v", err)
+	}
+	if reqs := fake.Requests(); len(reqs) != 0 {
+		t.Fatalf("uploaded before refusing: %v", reqs)
+	}
+	submit(t, fake, tripo.ImportModel, tripo.ImportModelRequest{Input: tripo.Input(writeFile(t, "mesh.fbx", 64))})
 }
 
 func TestSubmit_UploadsLocalInputs(t *testing.T) {

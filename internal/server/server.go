@@ -91,10 +91,10 @@ func text(format string) *mcp.CallToolResult {
 func boolPtr(b bool) *bool { return &b }
 
 var (
-	// Spent credits cannot be taken back, so hosts that confirm destructive
-	// calls should confirm these.
-	creditSpending = &mcp.ToolAnnotations{DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(true)}
-	freeTask       = &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(true)}
-	readOnly       = &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPtr(true)}
-	savesFiles     = &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(true)}
+	// Spent credits cannot be taken back, and these tools upload local files
+	// named in their inputs to Tripo, so hosts that confirm destructive calls
+	// should confirm them.
+	sendsToTripo = &mcp.ToolAnnotations{DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(true)}
+	readOnly     = &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPtr(true)}
+	savesFiles   = &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(true)}
 )

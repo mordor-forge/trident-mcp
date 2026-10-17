@@ -16,15 +16,15 @@ func addOperation[R any](s *Server, op tripo.Operation[R]) {
 	if err != nil {
 		panic(fmt.Sprintf("server: %s: %v", op.Name, err))
 	}
-	cost, annotations := "spends credits", creditSpending
+	cost := "spends credits"
 	if op.Free {
-		cost, annotations = "free", freeTask
+		cost = "free"
 	}
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        op.Name,
 		Description: op.Description + " Creates a Tripo task (" + cost + ") and returns its task_id immediately; then call wait_for_task.",
 		InputSchema: schema,
-		Annotations: annotations,
+		Annotations: sendsToTripo,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in R) (*mcp.CallToolResult, tripo.Submission, error) {
 		sub, err := op.Submit(ctx, s.tripo, in)
 		if err != nil {

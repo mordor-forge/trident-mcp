@@ -13,7 +13,8 @@ trident-mcp exposes the Tripo 3D API (v3) as MCP tools. Argument names are Tripo
   - a file token;
   - a task ID.
 
-  Local uploads are limited to images (png, jpg, webp; up to 20 MB) and meshes (glb, gltf, fbx, obj, stl, 3mf, usdz; up to 150 MB). Files over 50 MB use a presigned upload.
+  Local uploads are limited to images (png, jpg, webp; up to 20 MB) and meshes (glb, gltf, fbx, obj, stl, 3mf, usdz; up to 150 MB). Files over 50 MB, and webp/3mf/usdz files, use a presigned upload. Fields that only take a previous task (`complete_mesh`, `retarget_animation` and `edit_multiview` inputs, and multiview reuse) must be task IDs and are never uploaded.
+- **Confirmation.** Every task-creating tool and `upload_file` is annotated `destructiveHint: true`, because they spend credits or send local files to Tripo. Hosts that confirm destructive tools will ask first.
 - **Output URLs are signed and expire.** Tripo's docs say minutes; the live run below saw 24 hours. `download_task` and `wait_for_task` re-fetch the task before downloading, so the URLs they use are always fresh.
 - **Downloads keep the task's real format.** Use `convert_model` to get another format, then download that task.
 - **Model versions resolve through a static catalog.** Aliases (`p1`, `v3.1`, `rig-v3.0`, ...) map to dated IDs. A missing `model` becomes the tool's default. A field the chosen version rejects is dropped when unset and refused when set; for example, `quad: true` on P1 fails before any credits are spent. Unknown versions are passed through with a warning.

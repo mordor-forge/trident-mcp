@@ -3,6 +3,7 @@ package tripo
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -14,17 +15,19 @@ var (
 		Name: "text_to_model", Path: "/generation/text-to-model", Produces: ProducesMesh,
 		Description: "Generate a 3D mesh from a text prompt.",
 		check:       func(r *TextToModelRequest, model string) error { return r.check(model) },
+		wire:        wireGeneration,
 	}
 	ImageToModel = Operation[ImageToModelRequest]{
 		Name: "image_to_model", Path: "/generation/image-to-model", Produces: ProducesMesh,
 		Description: "Generate a 3D mesh from one reference image (a local path, URL, file token, or the task ID of a text_to_image / image_to_image task).",
 		check:       func(r *ImageToModelRequest, model string) error { return r.check(model) },
+		wire:        wireGeneration,
 	}
 	MultiviewToModel = Operation[MultiviewToModelRequest]{
 		Name: "multiview_to_model", Path: "/generation/multiview-to-model", Produces: ProducesMesh,
 		Description: "Generate a 3D mesh from 2-4 views of one object (front required), or from a successful image_to_multiview / edit_multiview task.",
 		check:       checkMultiview,
-		wire:        wireMultiview,
+		wire:        func(body map[string]any) { wireGeneration(body); wireMultiview(body) },
 	}
 
 	TextToImage = Operation[TextToImageRequest]{
@@ -69,6 +72,16 @@ var (
 	ImportModel = Operation[ImportModelRequest]{
 		Name: "import_model", Path: "/models/import", Produces: ProducesMesh,
 		Description: "Import an existing mesh (GLB, GLTF, FBX, OBJ, STL; up to 150 MB) so other operations can use it by task ID.",
+		check: func(r *ImportModelRequest, _ string) error {
+			if path, ok := localPath(string(r.Input)); ok {
+				switch extOf(path) {
+				case "glb", "gltf", "fbx", "obj", "stl":
+				default:
+					return fmt.Errorf("import_model takes GLB, GLTF, FBX, OBJ or STL files, not %s; convert it first", filepath.Base(path))
+				}
+			}
+			return nil
+		},
 	}
 	TextureModel = Operation[TextureModelRequest]{
 		Name: "texture_model", Path: "/models/texture", Produces: ProducesMesh,
@@ -157,16 +170,24 @@ type GenerationOptions struct {
 	ExportOrientation string `json:"export_orientation,omitempty" enum:"+x,-x,+y,-y" jsonschema:"Facing axis of the output (default +x). Later operations do not inherit it; prefer setting it on convert_model"`
 }
 
-func (g *GenerationOptions) check(string) error {
+func (g *GenerationOptions) check(model string) error {
 	textureVersion := modelID("texture_model", g.TextureVersion)
 	if g.TextureQuality == "fast" && textureVersion != "v3.5-20260815" {
 		return errors.New("texture_quality fast requires texture_version v3.5-20260815")
 	}
-	if g.Delight != nil && textureVersion != "" && textureVersion != "v3.5-20260815" {
-		return errors.New("delight only applies to texture_version v3.5-20260815")
+	if g.Delight != nil && textureVersion != "v3.5-20260815" {
+		return errors.New("delight only applies to texture_version v3.5-20260815; set texture_version too")
 	}
-	if isTrue(g.GenerateParts) && (!isFalse(g.Texture) || !isFalse(g.PBR)) {
-		return errors.New("generate_parts requires texture false and pbr false")
+	if isFalse(g.Texture) && isTrue(g.PBR) {
+		return errors.New("pbr true re-enables textures; drop it or set texture true")
+	}
+	if g.FaceLimit != nil {
+		if err := checkFaceLimit(model, *g.FaceLimit, isTrue(g.Quad)); err != nil {
+			return err
+		}
+	}
+	if isTrue(g.GenerateParts) && (!isFalse(g.Texture) || isTrue(g.PBR)) {
+		return errors.New("generate_parts requires texture false (and pbr not true)")
 	}
 	if isTrue(g.GenerateParts) && (isTrue(g.Quad) || isTrue(g.SmartLowPoly)) {
 		return errors.New("generate_parts cannot be combined with quad or smart_low_poly: Tripo ignores quad and produces no parts with smart_low_poly")
@@ -198,10 +219,10 @@ type Views struct {
 }
 
 type MultiviewToModelRequest struct {
-	Inputs           *Views `json:"inputs,omitempty" jsonschema:"Views of one object: front plus at least one of left, back, right. Each is a local path, URL or file token. Mutually exclusive with input"`
-	Input            Input  `json:"input,omitempty" jsonschema:"Task ID of a successful image_to_multiview or edit_multiview task. Mutually exclusive with inputs"`
-	TextureAlignment string `json:"texture_alignment,omitempty" enum:"original_image,geometry" jsonschema:"Align textures to the original images (default) or to the geometry"`
-	Orientation      string `json:"orientation,omitempty" enum:"default,align_image" jsonschema:"align_image rotates the mesh to match the front image. Needs texture"`
+	Inputs           *Views  `json:"inputs,omitempty" jsonschema:"Views of one object: front plus at least one of left, back, right. Each is a local path, URL or file token. Mutually exclusive with input"`
+	Input            TaskRef `json:"input,omitempty" jsonschema:"Task ID of a successful image_to_multiview or edit_multiview task. Mutually exclusive with inputs"`
+	TextureAlignment string  `json:"texture_alignment,omitempty" enum:"original_image,geometry" jsonschema:"Align textures to the original images (default) or to the geometry"`
+	Orientation      string  `json:"orientation,omitempty" enum:"default,align_image" jsonschema:"align_image rotates the mesh to match the front image. Needs texture"`
 	GenerationOptions
 }
 
@@ -341,7 +362,7 @@ type MultiviewEdit struct {
 }
 
 type EditMultiviewRequest struct {
-	Input   Input           `json:"input" jsonschema:"Task ID of an image_to_multiview or edit_multiview task"`
+	Input   TaskRef         `json:"input" jsonschema:"Task ID of an image_to_multiview or edit_multiview task"`
 	Prompts []MultiviewEdit `json:"prompts" jsonschema:"1-4 per-view edits (5 credits each)"`
 }
 
@@ -458,7 +479,7 @@ type SegmentMeshRequest struct {
 }
 
 type CompleteMeshRequest struct {
-	Input          Input    `json:"input" jsonschema:"Task ID of a segment_mesh task"`
+	Input          TaskRef  `json:"input" jsonschema:"Task ID of a segment_mesh task"`
 	Model          string   `json:"model,omitempty" jsonschema:"Completion version (only v1.0-20250506)"`
 	PartNames      []string `json:"part_names,omitempty" jsonschema:"Only complete these parts"`
 	CompletionMode string   `json:"completion_mode,omitempty" enum:"ai_completion,quick_cap" jsonschema:"ai_completion (default, 50 credits) regenerates hidden geometry; quick_cap (30) just closes holes"`
@@ -504,7 +525,7 @@ func checkRig(r *RigModelRequest, model string) error {
 }
 
 type RetargetAnimationRequest struct {
-	Input              Input    `json:"input" jsonschema:"Task ID of a rig_model task"`
+	Input              TaskRef  `json:"input" jsonschema:"Task ID of a rig_model task"`
 	Animation          string   `json:"animation,omitempty" jsonschema:"One preset, e.g. preset:idle, preset:walk, preset:run, preset:jump, preset:quadruped:walk, or preset:biped:* for v1.0 rigs"`
 	Animations         []string `json:"animations,omitempty" jsonschema:"Up to 5 presets in one task, instead of animation"`
 	OutFormat          string   `json:"out_format,omitempty" enum:"glb,fbx" jsonschema:"Output format (default glb)"`
@@ -527,6 +548,36 @@ func checkRetarget(r *RetargetAnimationRequest, _ string) error {
 		}
 	}
 	return nil
+}
+
+// checkFaceLimit enforces the documented P-series face budgets; H-series
+// limits depend on quality settings and are left to Tripo.
+func checkFaceLimit(model string, faces int, quad bool) error {
+	low, high := 0, 0
+	switch {
+	case model == "P1-20260311":
+		low, high = 50, 20000
+	case model == "P2-20260801" && quad:
+		low, high = 48, 25000
+	case model == "P2-20260801":
+		low, high = 48, 50000
+	default:
+		return nil
+	}
+	if faces < low || faces > high {
+		return fmt.Errorf("%s takes face_limit %d-%d%s, got %d", model, low, high, map[bool]string{true: " with quad", false: ""}[quad], faces)
+	}
+	return nil
+}
+
+// wireGeneration turns texture false with pbr unset into pbr false: Tripo
+// defaults pbr to true, which would re-enable (and bill) textures.
+func wireGeneration(body map[string]any) {
+	if texture, ok := body["texture"].(bool); ok && !texture {
+		if _, set := body["pbr"]; !set {
+			body["pbr"] = false
+		}
+	}
 }
 
 func isTrue(b *bool) bool  { return b != nil && *b }

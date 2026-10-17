@@ -213,6 +213,9 @@ type WaitOptions struct {
 // ctx ends first it returns the last Task seen together with ctx.Err(), so
 // callers can report progress and wait again.
 func (c *Client) WaitTask(ctx context.Context, id string, opts WaitOptions) (*Task, error) {
+	if err := checkTaskID(id); err != nil {
+		return nil, err
+	}
 	interval := opts.Interval
 	if interval <= 0 {
 		interval = 2 * time.Second

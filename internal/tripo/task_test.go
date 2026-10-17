@@ -118,6 +118,17 @@ func TestWaitTask_RidesOutTransientPollErrors(t *testing.T) {
 	}
 }
 
+func TestWaitTask_RejectsMalformedIDAtOnce(t *testing.T) {
+	fake := tripotest.New(t)
+	start := time.Now()
+	if _, err := fake.Client(t).WaitTask(context.Background(), "not a/task", tripo.WaitOptions{Interval: time.Second}); err == nil {
+		t.Fatal("expected an error")
+	}
+	if time.Since(start) > 100*time.Millisecond || len(fake.Requests()) != 0 {
+		t.Fatalf("took %v with %d requests", time.Since(start), len(fake.Requests()))
+	}
+}
+
 func TestWaitTask_ReturnsLastTaskOnTimeout(t *testing.T) {
 	fake := tripotest.New(t)
 	fake.SetTask("slow", map[string]any{"status": "running", "progress": 10})
