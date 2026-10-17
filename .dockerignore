@@ -1,8 +1,8 @@
-.git
-.github
-assets
-docs
-generated_imgs
-skills
-README.md
-LICENSE
+# Only go.mod, go.sum, cmd/, internal/ and LICENSE are needed to build the image.
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/
+!LICENSE
+**/*_test.go
