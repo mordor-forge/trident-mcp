@@ -113,7 +113,7 @@ func TestServer_ListsTheWholeSurface(t *testing.T) {
 		}
 	}
 	for _, tool := range res.Tools {
-		spends := slices.Contains(operationTools, tool.Name)
+		spends := slices.Contains(operationTools, tool.Name) && tool.Name != "rig_check"
 		destructive := tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint
 		if !tool.Annotations.ReadOnlyHint && spends != destructive {
 			t.Errorf("%s: destructiveHint %v, but credit-spending is %v", tool.Name, destructive, spends)
@@ -333,6 +333,10 @@ func TestAccountAndConfigTools(t *testing.T) {
 	text, structured = h.mustCall(t, "list_models", map[string]any{"operation": "rig_model"})
 	if models, _ := structured["models"].([]any); len(models) != 3 || !strings.Contains(text, "v3.0-20260909") {
 		t.Fatalf("list_models = %q", text)
+	}
+	text, _ = h.mustCall(t, "list_models", map[string]any{"operation": "text_to_image"})
+	if !strings.Contains(text, "seedream_v4 (Seedream v4) default") || strings.Contains(text, "seedream_v5 (Seedream v5) default") {
+		t.Fatalf("text_to_image defaults = %q", text)
 	}
 	if _, _, isErr := h.call(t, "list_models", map[string]any{"operation": "import_model"}); !isErr {
 		t.Fatal("list_models for a tool without model versions should fail")

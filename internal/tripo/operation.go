@@ -36,6 +36,9 @@ type Operation[R any] struct {
 	Path        string
 	Description string
 	Produces    Produces
+	// Free marks the rare Operation that creates a Task without spending
+	// credits (rig_check).
+	Free bool
 	// check validates cross-field rules against the resolved model version.
 	check func(req *R, model string) error
 	// wire rewrites the encoded body into Tripo's wire form, if it differs.

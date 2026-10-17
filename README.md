@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![trident-mcp MCP server](https://glama.ai/mcp/servers/mordor-forge/trident-mcp/badges/score.svg)](https://glama.ai/mcp/servers/mordor-forge/trident-mcp)
 
-An unofficial MCP server for the [Tripo 3D](https://www.tripo3d.ai) API that covers the whole v3 surface. Agents can:
+An unofficial MCP server for the [Tripo 3D](https://www.tripo3d.ai) API that covers every documented, deployed v3 workflow. A few endpoints are deliberately left out; they are listed in [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md#not-exposed). Agents can:
 
 - generate meshes from text, one image or several views;
 - make reference images and multiview sets;
@@ -49,7 +49,7 @@ The plugin asks for your Tripo key and output folder, and adds the `tripo-3d` sk
 2. `wait_for_task` waits with progress notifications, then saves the outputs to `<output dir>/<task_id>/`. For example: `model.glb`, `rendered_image.webp`, `generated_image.png`, `front_view.png`.
 3. Pass a `task_id` as the next tool's `input` to chain steps: image → mesh → rig → animation → FBX.
 
-Arguments use Tripo's own field names, so [Tripo's docs](https://developers.tripo3d.ai) apply verbatim. See [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) for all 28 tools.
+Arguments use Tripo's own field names, so [Tripo's docs](https://developers.tripo3d.ai) apply to them directly. A few convenience fields differ from Tripo's wire format, such as multiview `inputs` given as a `{front, left, back, right}` map. See [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) for all 28 tools.
 
 ## Configuration
 

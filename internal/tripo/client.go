@@ -26,6 +26,7 @@ const (
 	ChinaBaseURL = "https://openapi.tripo3d.com/v3"
 
 	defaultMaxRetries = 5
+	maxRetryWait      = 32 * time.Second
 	maxResponseBytes  = 32 << 20
 )
 
@@ -73,7 +74,12 @@ func New(opts Options) (*Client, error) {
 		c.http = &http.Client{Timeout: 60 * time.Second}
 	}
 	if c.transfer == nil {
-		c.transfer = &http.Client{}
+		// No overall timeout, so large transfers finish; but bound the phases
+		// before the body so a stalled host cannot hang a call forever.
+		t := http.DefaultTransport.(*http.Transport).Clone()
+		t.ResponseHeaderTimeout = 60 * time.Second
+		t.ExpectContinueTimeout = 5 * time.Second
+		c.transfer = &http.Client{Transport: t}
 	}
 	switch {
 	case c.maxRetries == 0:
@@ -179,7 +185,10 @@ func (c *Client) send(ctx context.Context, client *http.Client, build func() (*h
 		}
 		wait := apiErr.RetryAfter
 		if !apiErr.hasRetryAfter {
-			wait = min(time.Second<<attempt, 32*time.Second)
+			wait = time.Second << min(attempt, 5)
+		}
+		if wait > maxRetryWait {
+			return apiErr // Tripo asked for longer than a tool call should block
 		}
 		select {
 		case <-ctx.Done():

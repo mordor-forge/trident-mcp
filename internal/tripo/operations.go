@@ -118,8 +118,8 @@ var (
 	}
 
 	RigCheck = Operation[RigCheckRequest]{
-		Name: "rig_check", Path: "/animations/rig-check", Produces: ProducesRigCheck,
-		Description: "Check whether a mesh can be rigged and detect its skeleton type. Free. The verdict arrives as the task's riggable and rig_type outputs.",
+		Name: "rig_check", Path: "/animations/rig-check", Produces: ProducesRigCheck, Free: true,
+		Description: "Check whether a mesh can be rigged and detect its skeleton type. The verdict arrives as the task's riggable and rig_type outputs.",
 	}
 	RigModel = Operation[RigModelRequest]{
 		Name: "rig_model", Path: "/animations/rig", Produces: ProducesMesh,

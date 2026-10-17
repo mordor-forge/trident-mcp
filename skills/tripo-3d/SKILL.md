@@ -40,7 +40,7 @@ The tools live on the `trident` MCP server. Harnesses name them differently (`mc
 
    Done when the step's task is `success` and its files are saved.
 5. **Check.** After each mesh or image step, open its `rendered_image` or `generated_image` file. If your harness can view images, read the file. Compare it against the brief: right object, complete, clean silhouette, no fused extras. Fix a bad result at this step, before spending credits on follow-ups that would inherit the defect.
-6. **Finish.** Run the remaining plan steps the same way, ending with `trident:convert_model` when the use needs a specific format. Set `export_orientation`, scale and pivot on that final convert. They do not carry over from earlier steps.
+6. **Finish.** Run the remaining plan steps the same way, ending with `trident:convert_model` when the use needs a specific format. Set `export_orientation`, `scale_factor` and `pivot_to_center_bottom` on that final convert. They do not carry over from earlier steps.
 7. **Report.** Give every saved file's absolute path and format, the `task_id` of the last step (so later edits can chain from it), and the credits spent (the tasks' `credits_consumed`, or `trident:get_usage`). Other tools such as Blender, game engines and slicers can import these paths directly.
 
 ## Routes

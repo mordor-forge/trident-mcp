@@ -4,7 +4,7 @@ trident-mcp exposes the Tripo 3D API (v3) as MCP tools. Argument names are Tripo
 
 ## Contract
 
-- **Task-creating tools spend credits.** They return a `task_id` immediately. The structured result also carries `operation`, the resolved `model`, what the task `produces`, and any `warnings`.
+- **Task-creating tools spend credits, except the free `rig_check`.** They return a `task_id` immediately. The structured result also carries `operation`, the resolved `model`, what the task `produces`, and any `warnings`.
 - **`wait_for_task` is the normal next step.** It polls until the task reaches a terminal status (`success`, `failed`, `cancelled`, `banned`, `expired`) and sends MCP progress notifications. On success it saves every output to `<MODEL_OUTPUT_DIR>/<task_id>/<output>.<ext>`. If `timeout_seconds` (default 120, max 900) passes first, it returns `done: false`; call it again.
 - **Chain tasks by ID.** Pass a `task_id` as the next tool's `input`.
 - **Inputs.** Any `input` field (and `inputs`, `texture_prompt.image`, `ref_image`, ...) accepts:

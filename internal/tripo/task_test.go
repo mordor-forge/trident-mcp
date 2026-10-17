@@ -254,6 +254,18 @@ func TestClient_RetriesRateLimits(t *testing.T) {
 	}
 }
 
+func TestClient_DoesNotWaitOutLongRetryAfter(t *testing.T) {
+	fake := tripotest.New(t)
+	fake.Queue("/generation/text-to-image", tripotest.Response{Status: http.StatusTooManyRequests,
+		Header: http.Header{"Retry-After": {"3600"}}, Body: map[string]any{"code": 2000, "message": "concurrency limit"}})
+	start := time.Now()
+	_, err := tripo.TextToImage.Submit(context.Background(), fake.Client(t), tripo.TextToImageRequest{Prompt: "x"})
+	var apiErr *tripo.Error
+	if !errors.As(err, &apiErr) || apiErr.RetryAfter != time.Hour || time.Since(start) > 5*time.Second {
+		t.Fatalf("err = %v after %v", err, time.Since(start))
+	}
+}
+
 func TestClient_RejectsBadKey(t *testing.T) {
 	fake := tripotest.New(t)
 	c, err := tripo.New(tripo.Options{APIKey: "tsk_wrong", BaseURL: fake.URL})

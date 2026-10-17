@@ -170,8 +170,17 @@ func TestE2E_SpendingLifecycle(t *testing.T) {
 	for name, id := range map[string]string{"image_to_multiview": views, "rig_check": check, "texture_model": texture, "convert_model": convert} {
 		wg.Add(1)
 		go func() {
+			// t.Fatalf must run on the test goroutine, so record failures here.
 			defer wg.Done()
-			task := r.wait(name, id)
+			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
+			defer cancel()
+			task, err := c.WaitTask(ctx, id, tripo.WaitOptions{Interval: 3 * time.Second})
+			if err != nil || task.Status != tripo.StatusSuccess {
+				t.Errorf("%s %s: %+v, %v", name, id, task, err)
+				return
+			}
+			out, _ := json.Marshal(task.Output)
+			t.Logf("%s %s: %s, %g credits, output %s", name, id, task.Status, task.CreditsConsumed, out)
 			mu.Lock()
 			results[name] = task
 			mu.Unlock()
@@ -182,6 +191,9 @@ func TestE2E_SpendingLifecycle(t *testing.T) {
 	r.wait("retarget_animation", retarget)
 	r.download("retarget_animation", retarget)
 	wg.Wait()
+	if t.Failed() {
+		t.FailNow()
+	}
 
 	riggable, ok := results["rig_check"].Riggable()
 	t.Logf("rig_check: riggable=%v (present %v), rig_type %q", riggable, ok, results["rig_check"].RigType())

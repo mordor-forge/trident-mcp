@@ -1,13 +1,13 @@
 # trident-mcp
 
-An MCP server that gives agents the whole Tripo 3D API: generating, preparing and processing 3D assets as asynchronous Tripo tasks.
+An MCP server that gives agents the Tripo 3D API's v3 workflows: generating, preparing and processing 3D assets as asynchronous Tripo tasks.
 
 ## Language
 
 ### Work
 
 **Operation**:
-One credit-spending Tripo endpoint that creates a Task, such as text-to-model, texture or rig.
+One Tripo endpoint that creates a Task, such as text-to-model, texture or rig. All but rig check spend Credits.
 _Avoid_: job, request, tool (a tool is the MCP face of an Operation)
 
 **Task**:

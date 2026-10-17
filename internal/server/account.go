@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -109,8 +110,11 @@ func (s *Server) handleListModels(_ context.Context, _ *mcp.CallToolRequest, in 
 		if m.Stage != "" {
 			fmt.Fprintf(&b, " [%s]", m.Stage)
 		}
-		if len(m.DefaultFor) > 0 {
+		switch {
+		case in.Operation != "" && slices.Contains(m.DefaultFor, in.Operation):
 			b.WriteString(" default")
+		case in.Operation == "" && len(m.DefaultFor) > 0:
+			fmt.Fprintf(&b, " default for %s", strings.Join(m.DefaultFor, ", "))
 		}
 		fmt.Fprintf(&b, ": %s", m.Description)
 		if len(m.Aliases) > 0 {

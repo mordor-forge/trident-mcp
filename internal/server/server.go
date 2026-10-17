@@ -49,7 +49,7 @@ func New(client *tripo.Client, opts Options) *Server {
 	return s
 }
 
-const instructions = `trident-mcp drives the Tripo 3D API. Task-creating tools spend credits and return a task_id at once; call wait_for_task to wait for it and save its outputs (meshes, images, splats) under the output directory. Chain operations by passing a task_id as the next tool's input. Inputs also accept absolute local paths (uploaded automatically), URLs and file tokens. Check get_balance before expensive work and list_models for model versions.`
+const instructions = `trident-mcp drives the Tripo 3D API. Task-creating tools return a task_id at once and, except rig_check, spend credits; call wait_for_task to wait for it and save its outputs (meshes, images, splats) under the output directory. Chain operations by passing a task_id as the next tool's input. Inputs also accept absolute local paths (uploaded automatically), URLs and file tokens. Check get_balance before expensive work and list_models for model versions.`
 
 // registerOperations adds one tool per Tripo Operation.
 func (s *Server) registerOperations() {
@@ -94,6 +94,7 @@ var (
 	// Spent credits cannot be taken back, so hosts that confirm destructive
 	// calls should confirm these.
 	creditSpending = &mcp.ToolAnnotations{DestructiveHint: boolPtr(true), OpenWorldHint: boolPtr(true)}
+	freeTask       = &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), OpenWorldHint: boolPtr(true)}
 	readOnly       = &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: boolPtr(true)}
 	savesFiles     = &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true, OpenWorldHint: boolPtr(true)}
 )
