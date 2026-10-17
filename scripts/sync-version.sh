@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Sets the release version in the plugin manifest and every skill's metadata.
+# Sets the release version in the plugin manifest, server.json (MCP Registry)
+# and every skill's metadata.
 # Usage: scripts/sync-version.sh X.Y.Z   (then commit, then tag vX.Y.Z)
 set -euo pipefail
 
@@ -12,6 +13,7 @@ cd "$repo_root"
 
 tmp=$(mktemp)
 jq --arg v "$version" '.version = $v' .claude-plugin/plugin.json >"$tmp" && mv "$tmp" .claude-plugin/plugin.json
+jq --arg v "$version" '.version = $v | (.packages[] | select(.registryType == "oci") | .identifier) |= (sub(":[^:]*$"; "") + ":" + $v)' server.json >"$tmp" && mv "$tmp" server.json
 for skill in skills/*/SKILL.md; do
   sed -i.bak -E "s/^(  version: )\"[^\"]*\"/\1\"$version\"/" "$skill" && rm -f "$skill.bak"
 done

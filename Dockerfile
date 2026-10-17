@@ -35,6 +35,9 @@ RUN mkdir -p /out/rootfs/output && chmod 1777 /out/rootfs/output
 # distroless/static: CA certificates, tzdata and a non-root user (65532), nothing else.
 FROM gcr.io/distroless/static-debian13:nonroot
 
+# The MCP Registry checks this label to verify the image belongs to the server.
+LABEL io.modelcontextprotocol.server.name="io.github.mordor-forge/trident-mcp"
+
 COPY --from=build --chown=65532:65532 /out/rootfs/ /
 COPY --from=build /out/trident-mcp /usr/local/bin/trident-mcp
 COPY LICENSE /usr/share/doc/trident-mcp/LICENSE

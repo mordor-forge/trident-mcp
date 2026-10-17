@@ -37,6 +37,14 @@ Use your own Tripo key, one per person. [Tripo's terms](https://www.tripo3d.ai/t
   ```
 
 - **From source:** `CGO_ENABLED=0 go install github.com/mordor-forge/trident-mcp/cmd/trident-mcp@latest`.
+- **Container:**
+
+  ```bash
+  docker run -i --rm -e TRIPO_API_KEY -v "$HOME/generated_models:/output" --user "$(id -u):$(id -g)" ghcr.io/mordor-forge/trident-mcp
+  ```
+
+  Local-path inputs must sit under a mounted directory.
+- **MCP Registry:** listed as `io.github.mordor-forge/trident-mcp` (the container package), for clients that install from the registry.
 
 ## Live e2e tests
 
@@ -65,5 +73,6 @@ TRIPO_API_KEY=tsk_... TRIPO_E2E_SPEND=1 go test -tags=e2e -run TestE2E_SpendingL
 3. GoReleaser publishes linux, darwin and windows binaries for amd64 and arm64. Each archive also holds `LICENSE`, `README.md`, `.claude-plugin/plugin.json` and `skills/`, so an extracted archive is a plugin directory.
 4. Build provenance is attested.
 5. `ghcr.io/mordor-forge/trident-mcp` gets a multi-arch distroless image with SBOM and provenance.
+6. `server.json` is published to the MCP Registry. Skip this with the repository variable `MCP_REGISTRY_PUBLISH=false`.
 
 `main.version` is stamped through `-ldflags`.

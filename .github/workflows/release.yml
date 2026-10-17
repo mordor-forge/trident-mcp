@@ -5,6 +5,8 @@
 #   release   GoReleaser (binaries, archives that double as plugin directories,
 #             checksums, GitHub release) + build provenance attestations
 #   docker    multi-arch image on ghcr.io with SBOM and provenance
+#   registry  publish server.json to the MCP Registry (after the image exists);
+#             set vars.MCP_REGISTRY_PUBLISH to "false" to skip it
 name: Release
 
 on:
@@ -103,6 +105,12 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+          labels: |
+            io.modelcontextprotocol.server.name=io.github.mordor-forge/trident-mcp
+          annotations: |
+            io.modelcontextprotocol.server.name=io.github.mordor-forge/trident-mcp
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
       - id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -111,6 +119,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
           provenance: mode=max
@@ -122,3 +131,28 @@ jobs:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+  registry:
+    needs: [release, docker]
+    if: vars.MCP_REGISTRY_PUBLISH != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # mcp-publisher login github-oidc (namespace io.github.mordor-forge)
+    env:
+      MCP_PUBLISHER_VERSION: v1.8.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install mcp-publisher
+        run: |
+          curl -sSfL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+          ./mcp-publisher --help >/dev/null
+      - name: Publish to the MCP Registry
+        run: |
+          ./mcp-publisher validate server.json
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish server.json

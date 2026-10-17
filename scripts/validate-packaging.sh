@@ -31,7 +31,7 @@ skip() { printf 'skip %s\n' "$*"; }
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
 
 plugin=.claude-plugin/plugin.json
-for f in "$plugin" glama.json; do
+for f in "$plugin" server.json glama.json; do
   if jq empty "$f" 2>/dev/null; then ok "$f parses"; else fail "$f is not valid JSON"; fi
 done
 
@@ -48,6 +48,12 @@ version=$(jq -r .version "$plugin")
 if [ -n "$expect" ]; then
   if [ "$version" = "$expect" ]; then ok "plugin version $version matches $expect"; else fail "plugin version $version, expected $expect (run scripts/sync-version.sh $expect)"; fi
 fi
+if jq -e --arg v "$version" '.version == $v and .name == "io.github.mordor-forge/trident-mcp" and (.description | length <= 100) and ([.packages[] | select(.registryType == "oci") | .identifier] == ["ghcr.io/mordor-forge/trident-mcp:" + $v])' server.json >/dev/null; then
+  ok "server.json name, version $version and OCI tag"
+else
+  fail "server.json must carry version $version, the OCI tag :$version and a description of at most 100 characters"
+fi
+if grep -q 'io.modelcontextprotocol.server.name="io.github.mordor-forge/trident-mcp"' Dockerfile; then ok "Dockerfile carries the MCP Registry label"; else fail "Dockerfile lacks the io.modelcontextprotocol.server.name label"; fi
 for skill in skills/*/SKILL.md; do
   skill_version=$(awk -F'"' '/^  version:/ { print $2; exit }' "$skill")
   if [ "$skill_version" = "$version" ]; then ok "$skill version $skill_version"; else fail "$skill version '$skill_version' differs from plugin version $version"; fi

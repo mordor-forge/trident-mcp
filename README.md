@@ -2,7 +2,6 @@
 
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![trident-mcp MCP server](https://glama.ai/mcp/servers/mordor-forge/trident-mcp/badges/score.svg)](https://glama.ai/mcp/servers/mordor-forge/trident-mcp)
 
 An unofficial MCP server for the [Tripo 3D](https://www.tripo3d.ai) API that covers every documented, deployed v3 workflow. A few endpoints are deliberately left out; they are listed in [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md#not-exposed). Agents can:
 

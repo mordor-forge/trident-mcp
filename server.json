@@ -1,0 +1,65 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.mordor-forge/trident-mcp",
+  "title": "Trident (Tripo 3D)",
+  "description": "Unofficial MCP server for the Tripo 3D API: text/image to 3D, texturing, rigging, conversion",
+  "version": "0.2.0",
+  "websiteUrl": "https://github.com/mordor-forge/trident-mcp",
+  "repository": {
+    "url": "https://github.com/mordor-forge/trident-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/mordor-forge/trident-mcp:0.2.0",
+      "runtimeHint": "docker",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeArguments": [
+        {
+          "type": "named",
+          "name": "-v",
+          "description": "Host directory that receives generated meshes, images and splats (one folder per task), mounted at /output in the container. Local input files must live under a mounted directory too.",
+          "value": "{host_output_dir}:/output",
+          "isRequired": true,
+          "variables": {
+            "host_output_dir": {
+              "description": "Absolute path of a host directory for generated models (for example /home/you/generated_models).",
+              "format": "filepath",
+              "isRequired": true
+            }
+          }
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "description": "Tripo API key from https://platform.tripo3d.ai (starts with tsk_). Use your own key; Tripo's terms forbid sharing it.",
+          "value": "TRIPO_API_KEY={api_key}",
+          "isRequired": true,
+          "variables": {
+            "api_key": {
+              "description": "Tripo API key.",
+              "isRequired": true,
+              "isSecret": true
+            }
+          }
+        },
+        {
+          "type": "named",
+          "name": "-e",
+          "description": "Tripo API host. China-region keys need https://openapi.tripo3d.com/v3.",
+          "value": "TRIPO_BASE_URL={base_url}",
+          "isRequired": false,
+          "variables": {
+            "base_url": {
+              "description": "Tripo API base URL.",
+              "default": "https://openapi.tripo3d.ai/v3"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

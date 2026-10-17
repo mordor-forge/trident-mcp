@@ -57,4 +57,4 @@ The spending run checks the balance first. Run it after changing request shapes,
 
 ## Release
 
-Run `scripts/sync-version.sh X.Y.Z` (it updates the plugin manifest and the skill metadata), commit, then tag `vX.Y.Z` and push. `.github/workflows/release.yml` checks that the versions match the tag, then runs GoReleaser (linux, darwin and windows binaries for amd64 and arm64; the archives double as plugin directories), attests build provenance, and pushes a multi-arch image to `ghcr.io`.
+Run `scripts/sync-version.sh X.Y.Z` (it updates the plugin manifest, `server.json` and the skill metadata), commit, then tag `vX.Y.Z` and push. `.github/workflows/release.yml` checks that the versions match the tag, then runs GoReleaser (linux, darwin and windows binaries for amd64 and arm64; the archives double as plugin directories), attests build provenance, pushes a multi-arch image to `ghcr.io`, and publishes `server.json` to the MCP Registry.
