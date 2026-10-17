@@ -2,7 +2,7 @@
 
 ## 1. System Context
 
-`trident-mcp` is a local stdio MCP server. It receives tool calls from an MCP client, calls the Tripo v3 API with `TRIPO_API_KEY`, writes downloaded model artifacts to `MODEL_OUTPUT_DIR`, and returns task metadata to the client.
+`trident-mcp` is a local stdio MCP server. It receives tool calls from an MCP client, calls the Tripo v3 API with `TRIPO_API_KEY`, uploads local image/mesh files named in tool inputs, writes downloaded artifacts to `MODEL_OUTPUT_DIR/<task_id>/`, and returns task metadata to the client.
 
 Primary assumptions:
 
@@ -26,9 +26,9 @@ Primary assumptions:
 | Entry point | Description | Trust boundary | Reachable assets |
 | --- | --- | --- | --- |
 | MCP stdio tools | JSON tool calls from a client or agent | client to local server | API key, credits, output directory |
-| `upload_file` / path inputs | Local file paths selected for upload | local filesystem to Tripo | local files, API key |
+| `upload_file` / any `input` given a local path | Local file paths uploaded to Tripo | local filesystem to Tripo | local files, API key |
 | URL inputs | Public URLs sent to Tripo as image/model inputs | internet to Tripo | account credits, task metadata |
-| `download_model` | Remote artifact download to local disk | Tripo CDN to local filesystem | output directory |
+| `wait_for_task` / `download_task` | Remote artifact download to local disk | Tripo CDN to local filesystem | output directory |
 | Environment variables | Runtime configuration | shell/session to process | API key, output path |
 
 ## 4. Threats
@@ -36,12 +36,12 @@ Primary assumptions:
 | ID | Threat | Actor | Impact | Likelihood | Status |
 | --- | --- | --- | --- | --- | --- |
 | T1 | API key leaks through logs, docs, shell history, or committed config | local user, agent, repo reader | unauthorized credit use | medium | partially mitigated by env-only config docs |
-| T2 | Agent spends credits unintentionally by running generation tools | local agent | financial loss | medium | partially mitigated by balance checks and E2E opt-in flags |
-| T3 | Path traversal or unsafe task ID used in Tripo task URL | malicious tool input | unintended request path | low | mitigated by `validateTaskID` |
-| T4 | Upload tool exfiltrates a sensitive local file | local agent | data exposure to Tripo | medium | accepted risk; user/client must authorize tool calls |
+| T2 | Agent spends credits unintentionally by running generation tools | local agent | financial loss | medium | partially mitigated: tools carry MCP annotations, invalid requests fail locally before spending, 429 is the only retried status, the skill prices plans before running them, and spending e2e is opt-in and balance-gated |
+| T3 | Path traversal or unsafe task ID used in a Tripo URL or the `<output dir>/<task_id>/` download path | malicious tool input | unintended request or write path | low | mitigated: task IDs must match `^[A-Za-z0-9_-]{1,128}$` before any request or file write |
+| T4 | An input path exfiltrates a sensitive local file | local agent | data exposure to Tripo | medium | partially mitigated: only image (png/jpg/webp) and mesh (glb/gltf/fbx/obj/stl/3mf/usdz) extensions under the size limits are uploaded; the client must still authorize tool calls |
 | T5 | Downloaded model exploits a downstream viewer/importer | remote artifact source | local code execution in external tool | low to medium | documented operational risk |
 | T6 | Format confusion causes a user to open an unexpected artifact type | remote artifact source | workflow error or unsafe import | medium | mitigated by format inference and conversion guidance |
-| T7 | Static model catalog drifts from live Tripo support | upstream API change | failed tasks, wasted time | high | accepted with docs and tests |
+| T7 | Static model catalog drifts from live Tripo support | upstream API change | failed tasks, wasted time | high | mitigated: unknown versions pass through with a warning, `CatalogDate` is reported by `get_config`/`list_models`, and the spending e2e logs live response shapes |
 
 ## 5. Deprioritized Threats
 
@@ -53,7 +53,7 @@ Primary assumptions:
 
 ## 6. Open Questions
 
-- Should the server add optional allowlists for upload source directories?
+- Should the server add optional allowlists for upload source directories beyond the extension allowlist?
 - Should credit-spending tools support a configurable per-task credit warning threshold?
 - Should generated artifacts be quarantined or marked with provenance metadata?
 - Should MCP clients display a stronger confirmation before `upload_file` sends a local path?
@@ -61,8 +61,8 @@ Primary assumptions:
 ## 7. Provenance
 
 - Mode: human/agent documentation pass
-- Date: 2026-07-08
-- Inputs: current repository, AgentReady report, live Tripo v3 manual testing notes
+- Date: 2026-07-08, revised 2026-10-18 for the Tripo-only refactor
+- Inputs: current repository, AgentReady report, live Tripo v3 manual testing notes, Tripo v3 docs review
 
 ## 8. Recommended Mitigations
 
@@ -71,7 +71,7 @@ Primary assumptions:
 | Keep API keys in environment variables and out of committed MCP config | T1 | low |
 | Keep balance checks before credit-spending workflows in skills and tests | T2 | low |
 | Add optional max-credit or confirmation guardrails for generation tools | T2 | medium |
-| Add upload path allowlist support | T4 | medium |
+| Add upload directory allowlist support (extension allowlist exists) | T4 | medium |
 | Document safe handling of downloaded artifacts before Blender or engine import | T5 | low |
 | Keep format validation and conversion errors explicit | T6 | low |
 | Refresh model catalog after Tripo API/model changes | T7 | low |

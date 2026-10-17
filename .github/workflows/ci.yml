@@ -54,7 +54,7 @@ jobs:
       - name: E2E tests
         env:
           TRIPO_API_KEY: ${{ secrets.TRIPO_API_KEY }}
-        run: go test -tags=e2e -run "TestE2E_" ./internal/provider/tripo/ -count=1 -v -timeout 10m
+        run: go test -tags=e2e -run "TestE2E_" ./internal/tripo/ -count=1 -v -timeout 10m
 
   release:
     runs-on: ubuntu-latest

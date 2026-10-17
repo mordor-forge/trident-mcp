@@ -1,0 +1,45 @@
+{
+  "name": "trident",
+  "displayName": "Trident (Tripo 3D)",
+  "version": "0.2.0",
+  "description": "Generate, texture, retopologize, rig, animate and convert 3D models with the Tripo 3D API: text/image/multiview to 3D, P1/P2 low-poly, Smart UV, segmentation, Gaussian splats, with a workflow skill that prices plans before spending credits.",
+  "author": {
+    "name": "mordor-forge",
+    "url": "https://github.com/mordor-forge"
+  },
+  "homepage": "https://github.com/mordor-forge/trident-mcp#readme",
+  "repository": "https://github.com/mordor-forge/trident-mcp",
+  "license": "Apache-2.0",
+  "keywords": ["mcp", "tripo", "3d", "text-to-3d", "image-to-3d", "rigging", "game-assets", "3d-printing"],
+  "userConfig": {
+    "tripo_api_key": {
+      "type": "string",
+      "title": "Tripo API key",
+      "description": "Key from https://platform.tripo3d.ai (starts with tsk_), stored in your system keychain. Leave empty to use TRIPO_API_KEY from your environment.",
+      "sensitive": true
+    },
+    "output_dir": {
+      "type": "directory",
+      "title": "Output directory",
+      "description": "Where generated meshes, images and splats are saved, one folder per task.",
+      "default": "~/generated_models"
+    },
+    "base_url": {
+      "type": "string",
+      "title": "Tripo API host",
+      "description": "Leave as is for global keys. China-region keys need https://openapi.tripo3d.com/v3.",
+      "default": "https://openapi.tripo3d.ai/v3"
+    }
+  },
+  "mcpServers": {
+    "trident": {
+      "command": "trident-mcp",
+      "args": [],
+      "env": {
+        "TRIDENT_TRIPO_API_KEY": "${user_config.tripo_api_key}",
+        "MODEL_OUTPUT_DIR": "${user_config.output_dir}",
+        "TRIPO_BASE_URL": "${user_config.base_url}"
+      }
+    }
+  }
+}

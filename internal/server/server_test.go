@@ -3,1178 +3,335 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/mordor-forge/trident-mcp/internal/provider"
+	"github.com/mordor-forge/trident-mcp/internal/tripo/tripotest"
 )
 
-// --- Mock providers ---
+type harness struct {
+	fake      *tripotest.Server
+	session   *mcp.ClientSession
+	outputDir string
 
-type mockGenerator struct {
-	textResult           *provider.ModelOperation
-	textErr              error
-	imageResult          *provider.ModelOperation
-	imageErr             error
-	multiviewResult      *provider.ModelOperation
-	multiviewErr         error
-	textImageResult      *provider.ModelOperation
-	textImageErr         error
-	imageImageResult     *provider.ModelOperation
-	imageImageErr        error
-	imageMultiviewResult *provider.ModelOperation
-	imageMultiviewErr    error
-	editMultiviewResult  *provider.ModelOperation
-	editMultiviewErr     error
-	imageSplatResult     *provider.ModelOperation
-	imageSplatErr        error
+	mu       sync.Mutex
+	progress []*mcp.ProgressNotificationParams
 }
 
-func (m *mockGenerator) TextToModel(_ context.Context, _ provider.TextToModelRequest) (*provider.ModelOperation, error) {
-	return m.textResult, m.textErr
-}
-
-func (m *mockGenerator) ImageToModel(_ context.Context, _ provider.ImageToModelRequest) (*provider.ModelOperation, error) {
-	return m.imageResult, m.imageErr
-}
-
-func (m *mockGenerator) MultiviewToModel(_ context.Context, _ provider.MultiviewToModelRequest) (*provider.ModelOperation, error) {
-	return m.multiviewResult, m.multiviewErr
-}
-
-func (m *mockGenerator) TextToImage(_ context.Context, _ provider.TextToImageRequest) (*provider.ModelOperation, error) {
-	return m.textImageResult, m.textImageErr
-}
-
-func (m *mockGenerator) ImageToImage(_ context.Context, _ provider.ImageToImageRequest) (*provider.ModelOperation, error) {
-	return m.imageImageResult, m.imageImageErr
-}
-
-func (m *mockGenerator) ImageToMultiview(_ context.Context, _ provider.ImageToMultiviewRequest) (*provider.ModelOperation, error) {
-	return m.imageMultiviewResult, m.imageMultiviewErr
-}
-
-func (m *mockGenerator) EditMultiview(_ context.Context, _ provider.EditMultiviewRequest) (*provider.ModelOperation, error) {
-	return m.editMultiviewResult, m.editMultiviewErr
-}
-
-func (m *mockGenerator) ImageToSplat(_ context.Context, _ provider.ImageToSplatRequest) (*provider.ModelOperation, error) {
-	return m.imageSplatResult, m.imageSplatErr
-}
-
-type mockStatus struct {
-	statusResult   *provider.ModelTaskStatus
-	statusErr      error
-	downloadResult *provider.ModelResult
-	downloadErr    error
-	batchResult    *provider.BatchTasksResult
-	batchErr       error
-	uploadResult   *provider.FileUpload
-	uploadErr      error
-	presignResult  *provider.FileUpload
-	presignErr     error
-	balanceResult  *provider.AccountBalance
-	balanceErr     error
-	usageResult    *provider.AccountUsageResult
-	usageErr       error
-}
-
-func (m *mockStatus) Status(_ context.Context, _ string) (*provider.ModelTaskStatus, error) {
-	return m.statusResult, m.statusErr
-}
-
-func (m *mockStatus) Download(_ context.Context, _ string, _ string) (*provider.ModelResult, error) {
-	return m.downloadResult, m.downloadErr
-}
-
-func (m *mockStatus) BatchTasks(_ context.Context, _ []string) (*provider.BatchTasksResult, error) {
-	return m.batchResult, m.batchErr
-}
-
-func (m *mockStatus) UploadFile(_ context.Context, _ provider.UploadFileRequest) (*provider.FileUpload, error) {
-	return m.uploadResult, m.uploadErr
-}
-
-func (m *mockStatus) CreateFileUpload(_ context.Context, _ provider.CreateFileUploadRequest) (*provider.FileUpload, error) {
-	return m.presignResult, m.presignErr
-}
-
-func (m *mockStatus) GetBalance(_ context.Context) (*provider.AccountBalance, error) {
-	return m.balanceResult, m.balanceErr
-}
-
-func (m *mockStatus) GetUsage(_ context.Context) (*provider.AccountUsageResult, error) {
-	return m.usageResult, m.usageErr
-}
-
-type mockCommon struct {
-	batchResult   *provider.BatchTasksResult
-	batchErr      error
-	uploadResult  *provider.FileUpload
-	uploadErr     error
-	presignResult *provider.FileUpload
-	presignErr    error
-	balanceResult *provider.AccountBalance
-	balanceErr    error
-	usageResult   *provider.AccountUsageResult
-	usageErr      error
-}
-
-func (m *mockCommon) BatchTasks(_ context.Context, _ []string) (*provider.BatchTasksResult, error) {
-	return m.batchResult, m.batchErr
-}
-
-func (m *mockCommon) UploadFile(_ context.Context, _ provider.UploadFileRequest) (*provider.FileUpload, error) {
-	return m.uploadResult, m.uploadErr
-}
-
-func (m *mockCommon) CreateFileUpload(_ context.Context, _ provider.CreateFileUploadRequest) (*provider.FileUpload, error) {
-	return m.presignResult, m.presignErr
-}
-
-func (m *mockCommon) GetBalance(_ context.Context) (*provider.AccountBalance, error) {
-	return m.balanceResult, m.balanceErr
-}
-
-func (m *mockCommon) GetUsage(_ context.Context) (*provider.AccountUsageResult, error) {
-	return m.usageResult, m.usageErr
-}
-
-type mockGeneratorWithCommon struct {
-	mockGenerator
-	mockCommon
-}
-
-type mockPostProc struct {
-	retopResult    *provider.ModelOperation
-	retopErr       error
-	convertResult  *provider.ModelOperation
-	convertErr     error
-	stylizeResult  *provider.ModelOperation
-	stylizeErr     error
-	importResult   *provider.ModelOperation
-	importErr      error
-	refineResult   *provider.ModelOperation
-	refineErr      error
-	textureResult  *provider.ModelOperation
-	textureErr     error
-	segmentResult  *provider.ModelOperation
-	segmentErr     error
-	completeResult *provider.ModelOperation
-	completeErr    error
-	rigCheckResult *provider.RigCheckResult
-	rigCheckErr    error
-	rigResult      *provider.ModelOperation
-	rigErr         error
-	retargetResult *provider.ModelOperation
-	retargetErr    error
-}
-
-func (m *mockPostProc) Retopologize(_ context.Context, _ provider.RetopologyRequest) (*provider.ModelOperation, error) {
-	return m.retopResult, m.retopErr
-}
-
-func (m *mockPostProc) ConvertFormat(_ context.Context, _ provider.ConvertRequest) (*provider.ModelOperation, error) {
-	return m.convertResult, m.convertErr
-}
-
-func (m *mockPostProc) Stylize(_ context.Context, _ provider.StylizeRequest) (*provider.ModelOperation, error) {
-	return m.stylizeResult, m.stylizeErr
-}
-
-func (m *mockPostProc) ImportModel(_ context.Context, _ provider.ImportModelRequest) (*provider.ModelOperation, error) {
-	return m.importResult, m.importErr
-}
-
-func (m *mockPostProc) RefineModel(_ context.Context, _ provider.RefineModelRequest) (*provider.ModelOperation, error) {
-	return m.refineResult, m.refineErr
-}
-
-func (m *mockPostProc) TextureModel(_ context.Context, _ provider.TextureModelRequest) (*provider.ModelOperation, error) {
-	return m.textureResult, m.textureErr
-}
-
-func (m *mockPostProc) SegmentMesh(_ context.Context, _ provider.SegmentMeshRequest) (*provider.ModelOperation, error) {
-	return m.segmentResult, m.segmentErr
-}
-
-func (m *mockPostProc) CompleteMesh(_ context.Context, _ provider.CompleteMeshRequest) (*provider.ModelOperation, error) {
-	return m.completeResult, m.completeErr
-}
-
-func (m *mockPostProc) RigCheck(_ context.Context, _ provider.RigCheckRequest) (*provider.RigCheckResult, error) {
-	return m.rigCheckResult, m.rigCheckErr
-}
-
-func (m *mockPostProc) RigModel(_ context.Context, _ provider.RigModelRequest) (*provider.ModelOperation, error) {
-	return m.rigResult, m.rigErr
-}
-
-func (m *mockPostProc) RetargetAnimation(_ context.Context, _ provider.RetargetAnimationRequest) (*provider.ModelOperation, error) {
-	return m.retargetResult, m.retargetErr
-}
-
-type mockModelLister struct {
-	models []provider.ModelInfo
-	err    error
-}
-
-func (m *mockModelLister) ListModels(_ context.Context) ([]provider.ModelInfo, error) {
-	return m.models, m.err
-}
-
-// --- Test client helpers ---
-
-func connectTestClient(t *testing.T, gen *mockGenerator, stat *mockStatus, pp *mockPostProc, lister *mockModelLister) *mcp.ClientSession {
+// connect starts the real server, backed by the real Tripo client talking to
+// the fake API, and an in-memory MCP client.
+func connect(t *testing.T) *harness {
 	t.Helper()
-
-	var g provider.ModelGenerator
-	var s provider.ModelStatus
-	var p provider.ModelPostProcessor
-	var l provider.ModelLister
-
-	if gen != nil {
-		g = gen
-	}
-	if stat != nil {
-		s = stat
-	}
-	if pp != nil {
-		p = pp
-	}
-	if lister != nil {
-		l = lister
-	}
-
-	srv := NewWithOptions(g, s, p, l, Options{
-		Backend:   "tripo",
-		OutputDir: t.TempDir(),
-		Version:   "test-version",
-	})
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	h := &harness{fake: tripotest.New(t), outputDir: t.TempDir()}
+	srv := New(h.fake.Client(t), Options{OutputDir: h.outputDir, Version: "test", PollInterval: 10 * time.Millisecond})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	go func() { _ = srv.MCPServer().Run(ctx, serverTransport) }()
 
-	go func() {
-		_ = srv.mcp.Run(ctx, serverTransport)
-	}()
-
-	client := mcp.NewClient(&mcp.Implementation{
-		Name:    "test-client",
-		Version: "0.0.1",
-	}, nil)
-
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationClientRequest) {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			h.progress = append(h.progress, req.Params)
+		},
+	})
 	session, err := client.Connect(ctx, clientTransport, nil)
 	if err != nil {
-		t.Fatalf("client connect: %v", err)
+		t.Fatalf("connect: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = session.Close()
-	})
-
-	return session
+	t.Cleanup(func() { _ = session.Close() })
+	h.session = session
+	return h
 }
 
-// --- Constructor tests ---
-
-func TestNew_CreatesServer(t *testing.T) {
-	srv := New(&mockGenerator{}, &mockStatus{}, &mockPostProc{}, nil, t.TempDir())
-	if srv == nil {
-		t.Fatal("New returned nil")
-		return
+// call invokes a tool and returns its text and structured content.
+func (h *harness) call(t *testing.T, name string, args map[string]any) (string, map[string]any, bool) {
+	t.Helper()
+	params := &mcp.CallToolParams{Name: name, Arguments: args}
+	params.SetProgressToken("progress-" + name)
+	res, err := h.session.CallTool(context.Background(), params)
+	if err != nil {
+		t.Fatalf("%s: %v", name, err)
 	}
-	if srv.mcp == nil {
-		t.Fatal("underlying MCP server is nil")
+	var b strings.Builder
+	for _, c := range res.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			b.WriteString(tc.Text)
+		}
+	}
+	var structured map[string]any
+	if res.StructuredContent != nil {
+		data, _ := json.Marshal(res.StructuredContent)
+		_ = json.Unmarshal(data, &structured)
+	}
+	return b.String(), structured, res.IsError
+}
+
+func (h *harness) mustCall(t *testing.T, name string, args map[string]any) (string, map[string]any) {
+	t.Helper()
+	text, structured, isErr := h.call(t, name, args)
+	if isErr {
+		t.Fatalf("%s returned an error: %s", name, text)
+	}
+	return text, structured
+}
+
+var operationTools = []string{
+	"text_to_model", "image_to_model", "multiview_to_model",
+	"text_to_image", "image_to_image", "image_to_multiview", "edit_multiview", "image_to_splat",
+	"import_model", "texture_model", "convert_model",
+	"retopologize", "smart_uv", "segment_mesh", "complete_mesh", "smart_segment",
+	"rig_check", "rig_model", "retarget_animation",
+}
+
+var otherTools = []string{
+	"wait_for_task", "get_task", "get_tasks", "download_task",
+	"get_balance", "get_usage", "upload_file", "list_models", "get_config",
+}
+
+func TestServer_ListsTheWholeSurface(t *testing.T) {
+	h := connect(t)
+	res, err := h.session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, tool := range res.Tools {
+		got = append(got, tool.Name)
+		if tool.Description == "" || tool.Annotations == nil {
+			t.Errorf("%s lacks a description or annotations", tool.Name)
+		}
+	}
+	want := append(append([]string(nil), operationTools...), otherTools...)
+	sort.Strings(got)
+	sort.Strings(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("tools = %v\nwant    %v", got, want)
 	}
 }
 
-func TestNew_NilProviders(t *testing.T) {
-	srv := New(nil, nil, nil, nil, t.TempDir())
-	if srv == nil {
-		t.Fatal("New returned nil with all nil providers")
+func TestDocs_DescribeEveryTool(t *testing.T) {
+	doc, err := os.ReadFile(filepath.Join("..", "..", "docs", "MCP_TOOLS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range append(append([]string(nil), operationTools...), otherTools...) {
+		if !strings.Contains(string(doc), "`"+name+"`") {
+			t.Errorf("docs/MCP_TOOLS.md does not mention `%s`", name)
+		}
 	}
 }
 
-func TestMCPServer_ReturnsUnderlyingServer(t *testing.T) {
-	srv := New(&mockGenerator{}, nil, nil, nil, t.TempDir())
-	if srv.MCPServer() != srv.mcp {
-		t.Fatal("MCPServer() did not return the underlying server")
+func TestOperationTools_ReachTripo(t *testing.T) {
+	h := connect(t)
+	image := filepath.Join(t.TempDir(), "ref.png")
+	if err := os.WriteFile(image, []byte("png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		tool string
+		args map[string]any
+		path string
+		want map[string]any
+	}{
+		{"text_to_model", map[string]any{"prompt": "a lantern", "model": "p1", "face_limit": 3000},
+			"/generation/text-to-model", map[string]any{"prompt": "a lantern", "model": "P1-20260311", "face_limit": 3000.0}},
+		{"image_to_model", map[string]any{"input": image, "orientation": "align_image"},
+			"/generation/image-to-model", map[string]any{"orientation": "align_image", "model": "v3.1-20260211"}},
+		{"multiview_to_model", map[string]any{"inputs": map[string]any{"front": "https://x/f.png", "left": "https://x/l.png"}},
+			"/generation/multiview-to-model", map[string]any{"inputs": []any{map[string]any{"front": "https://x/f.png"}, map[string]any{"left": "https://x/l.png"}}}},
+		{"text_to_image", map[string]any{"prompt": "a sword", "template": "t_pose"},
+			"/generation/text-to-image", map[string]any{"model": "seedream_v4", "template": "t_pose"}},
+		{"image_to_image", map[string]any{"input": "task-img", "template": "3d_enhance"},
+			"/generation/image-to-image", map[string]any{"input": "task-img", "template": "3d_enhance"}},
+		{"image_to_multiview", map[string]any{"input": "task-img"}, "/generation/image-to-multiview", map[string]any{"input": "task-img"}},
+		{"edit_multiview", map[string]any{"input": "task-mv", "prompts": []any{map[string]any{"view": "left", "prompt": "fix the arm"}}},
+			"/generation/edit-multiview", map[string]any{"input": "task-mv"}},
+		{"image_to_splat", map[string]any{"input": "https://x/a.png"}, "/generation/image-to-splat", map[string]any{"input": "https://x/a.png"}},
+		{"import_model", map[string]any{"input": "https://x/a.glb"}, "/models/import", map[string]any{"input": "https://x/a.glb"}},
+		{"texture_model", map[string]any{"input": "task-mesh", "texture_prompt": map[string]any{"text": "rusty iron"}},
+			"/models/texture", map[string]any{"model": "v3.0-20250812", "texture_prompt": map[string]any{"text": "rusty iron"}}},
+		{"convert_model", map[string]any{"input": "task-mesh", "format": "STL", "flatten_bottom": true},
+			"/models/convert", map[string]any{"format": "STL", "flatten_bottom": true}},
+		{"retopologize", map[string]any{"input": "task-mesh", "quad": true, "face_limit": 5000},
+			"/mesh/decimate", map[string]any{"model": "v2.0", "quad": true, "face_limit": 5000.0}},
+		{"smart_uv", map[string]any{"input": "task-mesh"}, "/mesh/uv", map[string]any{"input": "task-mesh"}},
+		{"segment_mesh", map[string]any{"input": "task-mesh"}, "/mesh/segment", map[string]any{"model": "v1.0-20250506"}},
+		{"complete_mesh", map[string]any{"input": "task-seg"}, "/mesh/complete", map[string]any{"input": "task-seg"}},
+		{"smart_segment", map[string]any{"seg_type": "image", "input": "https://x/a.png"}, "/mesh/smartsegment", map[string]any{"seg_type": "image"}},
+		{"rig_check", map[string]any{"input": "task-mesh"}, "/animations/rig-check", map[string]any{"input": "task-mesh"}},
+		{"rig_model", map[string]any{"input": "task-mesh", "model": "v2.5", "rig_type": "quadruped"},
+			"/animations/rig", map[string]any{"model": "v2.5-20260210", "rig_type": "quadruped"}},
+		{"retarget_animation", map[string]any{"input": "task-rig", "animation": "preset:walk"},
+			"/animations/retarget", map[string]any{"animation": "preset:walk"}},
+	}
+	covered := map[string]bool{}
+	for _, tc := range cases {
+		covered[tc.tool] = true
+		t.Run(tc.tool, func(t *testing.T) {
+			text, structured := h.mustCall(t, tc.tool, tc.args)
+			taskID, _ := structured["task_id"].(string)
+			if taskID == "" || !strings.Contains(text, "wait_for_task") {
+				t.Fatalf("result = %q %v", text, structured)
+			}
+			body := h.fake.Last(t, tc.path).Body
+			for k, v := range tc.want {
+				if !reflect.DeepEqual(body[k], v) {
+					t.Errorf("body[%q] = %#v, want %#v", k, body[k], v)
+				}
+			}
+		})
+	}
+	for _, tool := range operationTools {
+		if !covered[tool] {
+			t.Errorf("no test case calls %s", tool)
+		}
 	}
 }
 
-// --- Tool registration tests ---
+func TestOperationTools_SchemaRejectsBadArguments(t *testing.T) {
+	h := connect(t)
+	for name, args := range map[string]map[string]any{
+		"old camelCase argument": {"prompt": "x", "faceLimit": 1000},
+		"enum outside the list":  {"prompt": "x", "texture_quality": "ultra"},
+		"wrong type":             {"prompt": "x", "face_limit": "many"},
+		"missing prompt":         {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if text, _, isErr := h.call(t, "text_to_model", args); !isErr {
+				t.Fatalf("accepted: %s", text)
+			}
+		})
+	}
+	if reqs := h.fake.Requests(); len(reqs) != 0 {
+		t.Fatalf("bad arguments reached Tripo: %v", reqs)
+	}
+}
 
-func TestToolsRegistered_AllProviders(t *testing.T) {
-	session := connectTestClient(t,
-		&mockGenerator{textResult: &provider.ModelOperation{}},
-		&mockStatus{statusResult: &provider.ModelTaskStatus{}},
-		&mockPostProc{retopResult: &provider.ModelOperation{}},
-		&mockModelLister{models: []provider.ModelInfo{}},
+func TestOperationTools_SurfaceTripoErrors(t *testing.T) {
+	h := connect(t)
+	h.fake.Queue("/generation/text-to-model", tripotest.Response{Status: 403, Body: map[string]any{
+		"code": 2010, "message": "Insufficient credits", "suggestion": "Top up at platform.tripo3d.ai",
+	}})
+	text, _, isErr := h.call(t, "text_to_model", map[string]any{"prompt": "x"})
+	if !isErr || !strings.Contains(text, "Insufficient credits") || !strings.Contains(text, "Top up") {
+		t.Fatalf("error = %q", text)
+	}
+}
+
+func TestWaitForTask_ReportsProgressAndSavesOutputs(t *testing.T) {
+	h := connect(t)
+	model := h.fake.AddFile("pbr_model.glb", "model/gltf-binary", []byte("glTF-binary"))
+	preview := h.fake.AddFile("render.webp", "image/webp", []byte("RIFF"))
+	h.fake.SetTask("t1",
+		map[string]any{"status": "queued", "queuing_num": 2},
+		map[string]any{"status": "queued", "queuing_num": 1},
+		map[string]any{"status": "running", "progress": 40},
+		map[string]any{"status": "success", "type": "text_to_model", "credits_consumed": 40,
+			"output": map[string]any{"model_url": model, "rendered_image_url": preview}},
 	)
 
-	result, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("ListTools: %v", err)
+	text, structured := h.mustCall(t, "wait_for_task", map[string]any{"task_id": "t1"})
+	if structured["done"] != true || !strings.Contains(text, "Saved 2 file(s)") {
+		t.Fatalf("wait = %q %v", text, structured)
 	}
-
-	wantTools := map[string]bool{
-		"text_to_3d":         false,
-		"image_to_3d":        false,
-		"multiview_to_3d":    false,
-		"text_to_image":      false,
-		"image_to_image":     false,
-		"image_to_multiview": false,
-		"edit_multiview":     false,
-		"image_to_splat":     false,
-		"task_status":        false,
-		"get_task":           false,
-		"get_tasks":          false,
-		"get_balance":        false,
-		"get_usage":          false,
-		"download_model":     false,
-		"upload_file":        false,
-		"create_file_upload": false,
-		"retopologize":       false,
-		"convert_format":     false,
-		"stylize":            false,
-		"import_model":       false,
-		"refine_model":       false,
-		"texture_model":      false,
-		"segment_mesh":       false,
-		"complete_mesh":      false,
-		"rig_check":          false,
-		"rig_model":          false,
-		"retarget_animation": false,
-		"list_models":        false,
-		"get_config":         false,
+	saved := filepath.Join(h.outputDir, "t1", "model.glb")
+	if data, err := os.ReadFile(saved); err != nil || string(data) != "glTF-binary" {
+		t.Fatalf("saved model: %q, %v", data, err)
 	}
-
-	for _, tool := range result.Tools {
-		if _, ok := wantTools[tool.Name]; ok {
-			wantTools[tool.Name] = true
-		}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.progress) != 3 || !strings.Contains(h.progress[0].Message, "queued (position 2)") {
+		t.Fatalf("progress = %+v", h.progress)
 	}
-	for name, found := range wantTools {
-		if !found {
-			t.Errorf("tool %q not registered", name)
+	for i := 1; i < len(h.progress); i++ {
+		if h.progress[i].Progress <= h.progress[i-1].Progress {
+			t.Fatalf("progress must increase: %v then %v", h.progress[i-1].Progress, h.progress[i].Progress)
 		}
 	}
 }
 
-func TestToolsNotRegistered_WhenProvidersNil(t *testing.T) {
-	srv := New(nil, nil, nil, nil, t.TempDir())
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	go func() {
-		_ = srv.mcp.Run(ctx, serverTransport)
-	}()
-
-	client := mcp.NewClient(&mcp.Implementation{
-		Name:    "test-client",
-		Version: "0.0.1",
-	}, nil)
-
-	session, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = session.Close()
-	})
-
-	result, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("ListTools: %v", err)
-	}
-
-	// Only get_config should be registered.
-	if len(result.Tools) != 1 {
-		names := make([]string, len(result.Tools))
-		for i, tool := range result.Tools {
-			names[i] = tool.Name
-		}
-		t.Errorf("expected 1 tool (get_config) when all providers nil, got %d: %v", len(result.Tools), names)
+func TestWaitForTask_ReturnsWhileStillRunning(t *testing.T) {
+	h := connect(t)
+	h.fake.SetTask("slow", map[string]any{"status": "running", "progress": 30})
+	text, structured := h.mustCall(t, "wait_for_task", map[string]any{"task_id": "slow", "timeout_seconds": 1})
+	if structured["done"] != false || !strings.Contains(text, "call wait_for_task again") {
+		t.Fatalf("wait = %q %v", text, structured)
 	}
 }
 
-func TestGenerationToolsNotRegistered_WithoutStatusProvider(t *testing.T) {
-	session := connectTestClient(t, &mockGenerator{}, nil, nil, nil)
-
-	result, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("ListTools: %v", err)
-	}
-
-	for _, tool := range result.Tools {
-		if tool.Name == "text_to_3d" || tool.Name == "image_to_3d" || tool.Name == "multiview_to_3d" {
-			t.Fatalf("generation tool %q should not be registered without status support", tool.Name)
-		}
+func TestWaitForTask_ReportsFailureWithoutDownloading(t *testing.T) {
+	h := connect(t)
+	h.fake.SetTask("bad", map[string]any{"status": "banned", "error_code": 2008, "error_message": "content policy"})
+	text, structured := h.mustCall(t, "wait_for_task", map[string]any{"task_id": "bad"})
+	if structured["done"] != true || !strings.Contains(text, "content policy") || !strings.Contains(text, "code 2008") {
+		t.Fatalf("wait = %q %v", text, structured)
 	}
 }
 
-func TestCommonToolsRegistered_WithoutStatusProvider(t *testing.T) {
-	var gen provider.ModelGenerator = &mockGeneratorWithCommon{}
-	srv := NewWithOptions(gen, nil, nil, nil, Options{
-		Backend:   "tripo",
-		OutputDir: t.TempDir(),
-		Version:   "test-version",
-	})
+func TestTaskTools(t *testing.T) {
+	h := connect(t)
+	h.fake.Succeed("rc", map[string]any{"riggable": true, "rig_type": "biped"})
+	h.fake.Succeed("img", map[string]any{"generated_image_url": h.fake.AddFile("img.png", "image/png", []byte("PNG"))})
 
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	go func() {
-		_ = srv.mcp.Run(ctx, serverTransport)
-	}()
-
-	client := mcp.NewClient(&mcp.Implementation{
-		Name:    "test-client",
-		Version: "0.0.1",
-	}, nil)
-
-	session, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = session.Close()
-	})
-
-	result, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("ListTools: %v", err)
+	text, _ := h.mustCall(t, "get_task", map[string]any{"task_id": "rc"})
+	if !strings.Contains(text, "Riggable: true (rig_type biped)") {
+		t.Fatalf("get_task = %q", text)
 	}
 
-	wantCommon := map[string]bool{
-		"get_tasks":          false,
-		"get_balance":        false,
-		"get_usage":          false,
-		"upload_file":        false,
-		"create_file_upload": false,
+	text, structured := h.mustCall(t, "get_tasks", map[string]any{"task_ids": []any{"rc", "nope"}})
+	if !strings.Contains(text, "Not found: nope") || structured["tasks"] == nil {
+		t.Fatalf("get_tasks = %q %v", text, structured)
 	}
-	for _, tool := range result.Tools {
-		if _, ok := wantCommon[tool.Name]; ok {
-			wantCommon[tool.Name] = true
-		}
-		if tool.Name == "task_status" || tool.Name == "download_model" {
-			t.Fatalf("status tool %q should not be registered without status support", tool.Name)
-		}
-	}
-	for name, found := range wantCommon {
-		if !found {
-			t.Errorf("common tool %q not registered", name)
-		}
+
+	text, _ = h.mustCall(t, "download_task", map[string]any{"task_id": "img"})
+	if !strings.Contains(text, filepath.Join(h.outputDir, "img", "generated_image.png")) {
+		t.Fatalf("download_task = %q", text)
 	}
 }
 
-func TestPostProcessToolsNotRegistered_WithoutStatusProvider(t *testing.T) {
-	session := connectTestClient(t, nil, nil, &mockPostProc{}, nil)
+func TestAccountAndConfigTools(t *testing.T) {
+	h := connect(t)
 
-	result, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("ListTools: %v", err)
+	text, _ := h.mustCall(t, "get_balance", nil)
+	if !strings.Contains(text, "Available credits: 1000") {
+		t.Fatalf("get_balance = %q", text)
 	}
 
-	for _, tool := range result.Tools {
-		if tool.Name == "retopologize" || tool.Name == "convert_format" || tool.Name == "stylize" {
-			t.Fatalf("post-process tool %q should not be registered without status support", tool.Name)
-		}
+	h.fake.Usage = []any{map[string]any{"task_id": "t1", "type": "rig", "credits_consumed": 25}}
+	text, _ = h.mustCall(t, "get_usage", map[string]any{"limit": 5})
+	if !strings.Contains(text, "1 task(s), 25 credits") {
+		t.Fatalf("get_usage = %q", text)
 	}
-}
 
-// --- Generation tool tests ---
-
-func TestTextTo3D_Success(t *testing.T) {
-	gen := &mockGenerator{
-		textResult: &provider.ModelOperation{
-			TaskID: "task-txt-1",
-			Status: "submitted",
-		},
-	}
-
-	session := connectTestClient(t, gen, &mockStatus{}, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "text_to_3d",
-		Arguments: map[string]any{
-			"prompt": "a red dragon",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-
-	assertContentContains(t, res, "3D generation started!")
-	assertContentContains(t, res, "task-txt-1")
-	assertStructuredField(t, res, "taskId", "task-txt-1")
-	assertStructuredField(t, res, "status", "submitted")
-}
-
-func TestTextTo3D_Error(t *testing.T) {
-	gen := &mockGenerator{
-		textErr: errors.New("credit limit exceeded"),
-	}
-
-	session := connectTestClient(t, gen, &mockStatus{}, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "text_to_3d",
-		Arguments: map[string]any{
-			"prompt": "anything",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if !res.IsError {
-		t.Fatal("expected error result, got success")
-	}
-	assertContentContains(t, res, "credit limit exceeded")
-}
-
-func TestImageTo3D_Success(t *testing.T) {
-	gen := &mockGenerator{
-		imageResult: &provider.ModelOperation{
-			TaskID: "task-img-1",
-			Status: "submitted",
-		},
-	}
-
-	session := connectTestClient(t, gen, &mockStatus{}, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "image_to_3d",
-		Arguments: map[string]any{
-			"imageUrl": "https://example.com/photo.jpg",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-
-	assertContentContains(t, res, "3D generation from image started!")
-	assertStructuredField(t, res, "taskId", "task-img-1")
-}
-
-func TestMultiviewTo3D_Success(t *testing.T) {
-	gen := &mockGenerator{
-		multiviewResult: &provider.ModelOperation{
-			TaskID: "task-mv-1",
-			Status: "submitted",
-		},
-	}
-
-	session := connectTestClient(t, gen, &mockStatus{}, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "multiview_to_3d",
-		Arguments: map[string]any{
-			"imageUrls": []string{
-				"https://example.com/front.jpg",
-				"https://example.com/side.jpg",
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-
-	assertContentContains(t, res, "Multi-view 3D generation started!")
-	assertStructuredField(t, res, "taskId", "task-mv-1")
-}
-
-func TestTextToImage_Success(t *testing.T) {
-	gen := &mockGenerator{
-		textImageResult: &provider.ModelOperation{
-			TaskID: "task-text-image",
-			Status: "submitted",
-		},
-	}
-
-	session := connectTestClient(t, gen, &mockStatus{}, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "text_to_image",
-		Arguments: map[string]any{
-			"prompt": "a product photo",
-			"model":  "seedream_v5",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-	assertContentContains(t, res, "Image generation started")
-	assertStructuredField(t, res, "taskId", "task-text-image")
-}
-
-// --- Status tool tests ---
-
-func TestTaskStatus_Success(t *testing.T) {
-	stat := &mockStatus{
-		statusResult: &provider.ModelTaskStatus{
-			TaskID:   "task-abc",
-			Status:   "running",
-			Progress: 65,
-		},
-	}
-
-	session := connectTestClient(t, nil, stat, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "task_status",
-		Arguments: map[string]any{
-			"taskId": "task-abc",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-
-	assertContentContains(t, res, "task-abc")
-	assertContentContains(t, res, "running")
-	assertContentContains(t, res, "65%")
-	assertStructuredField(t, res, "taskId", "task-abc")
-	assertStructuredField(t, res, "status", "running")
-}
-
-func TestTaskStatus_WithError(t *testing.T) {
-	stat := &mockStatus{
-		statusResult: &provider.ModelTaskStatus{
-			TaskID:   "task-fail",
-			Status:   "failed",
-			Progress: 0,
-			Error:    "content moderation rejected",
-		},
-	}
-
-	session := connectTestClient(t, nil, stat, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "task_status",
-		Arguments: map[string]any{
-			"taskId": "task-fail",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	assertContentContains(t, res, "content moderation rejected")
-}
-
-func TestGetTasks_Success(t *testing.T) {
-	stat := &mockStatus{
-		batchResult: &provider.BatchTasksResult{
-			Tasks: map[string]provider.ModelTaskStatus{
-				"task-a": {TaskID: "task-a", Status: "success"},
-			},
-			Missed: []string{"task-b"},
-		},
-	}
-
-	session := connectTestClient(t, nil, stat, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "get_tasks",
-		Arguments: map[string]any{
-			"taskIds": []string{"task-a", "task-b"},
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-	assertContentContains(t, res, "task-a")
-	assertContentContains(t, res, "task-b")
-}
-
-func TestCreateFileUpload_Success(t *testing.T) {
-	stat := &mockStatus{
-		presignResult: &provider.FileUpload{
-			PresignedURL: "https://storage.example/upload",
-			FileToken:    "file_presigned",
-			ExpiresIn:    1800,
-		},
-	}
-
-	session := connectTestClient(t, nil, stat, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "create_file_upload",
-		Arguments: map[string]any{
-			"format": "glb",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-	assertContentContains(t, res, "file_presigned")
-	assertStructuredField(t, res, "fileToken", "file_presigned")
-}
-
-func TestUploadFile_Success(t *testing.T) {
-	stat := &mockStatus{
-		uploadResult: &provider.FileUpload{
-			FileToken: "file_uploaded",
-		},
-	}
-
-	session := connectTestClient(t, nil, stat, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "upload_file",
-		Arguments: map[string]any{
-			"filePath": "/tmp/model.glb",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-	assertContentContains(t, res, "file_uploaded")
-	assertStructuredField(t, res, "fileToken", "file_uploaded")
-}
-
-func TestGetBalance_Success(t *testing.T) {
-	stat := &mockStatus{
-		balanceResult: &provider.AccountBalance{
-			Balance: 10000.5,
-			Frozen:  200.25,
-		},
-	}
-
-	session := connectTestClient(t, nil, stat, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "get_balance",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-	assertContentContains(t, res, "10000.5")
-	assertStructuredField(t, res, "balance", 10000.5)
-	assertStructuredField(t, res, "frozen", 200.25)
-}
-
-func TestGetUsage_Success(t *testing.T) {
-	stat := &mockStatus{
-		usageResult: &provider.AccountUsageResult{
-			Records: []provider.AccountUsageRecord{
-				{
-					TaskID:          "task-usage",
-					Type:            "text_to_model",
-					CreditsConsumed: 5.25,
-					CreatedAt:       "2026-07-08T10:00:00Z",
-				},
-			},
-		},
-	}
-
-	session := connectTestClient(t, nil, stat, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "get_usage",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-	assertContentContains(t, res, "task-usage")
-	assertStructuredField(t, res, "records", []any{
-		map[string]any{
-			"taskId":          "task-usage",
-			"type":            "text_to_model",
-			"creditsConsumed": 5.25,
-			"createdAt":       "2026-07-08T10:00:00Z",
-		},
-	})
-}
-
-func TestDownloadModel_Success(t *testing.T) {
-	stat := &mockStatus{
-		downloadResult: &provider.ModelResult{
-			FilePath: "/tmp/test/model-abc.glb",
-			Format:   "GLTF",
-			TaskID:   "task-dl-1",
-		},
-	}
-
-	session := connectTestClient(t, nil, stat, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "download_model",
-		Arguments: map[string]any{
-			"taskId": "task-dl-1",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-
-	assertContentContains(t, res, "Model downloaded!")
-	assertContentContains(t, res, "/tmp/test/model-abc.glb")
-	assertContentContains(t, res, "GLTF")
-	assertStructuredField(t, res, "filePath", "/tmp/test/model-abc.glb")
-	assertStructuredField(t, res, "format", "GLTF")
-}
-
-func TestDownloadModel_Error(t *testing.T) {
-	stat := &mockStatus{
-		downloadErr: errors.New("task not complete"),
-	}
-
-	session := connectTestClient(t, nil, stat, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "download_model",
-		Arguments: map[string]any{
-			"taskId": "task-dl-2",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if !res.IsError {
-		t.Fatal("expected error result, got success")
-	}
-	assertContentContains(t, res, "task not complete")
-}
-
-// --- Post-processing tool tests ---
-
-func TestRetopologize_Success(t *testing.T) {
-	pp := &mockPostProc{
-		retopResult: &provider.ModelOperation{
-			TaskID: "retopo-1",
-			Status: "submitted",
-		},
-	}
-
-	session := connectTestClient(t, nil, &mockStatus{}, pp, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "retopologize",
-		Arguments: map[string]any{
-			"originalTaskId": "orig-task",
-			"quad":           true,
-			"targetFaces":    4000,
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-
-	assertContentContains(t, res, "Retopology started")
-	assertContentContains(t, res, "quad mesh")
-	assertStructuredField(t, res, "taskId", "retopo-1")
-}
-
-func TestRetopologize_TriangleMode(t *testing.T) {
-	pp := &mockPostProc{
-		retopResult: &provider.ModelOperation{
-			TaskID: "retopo-2",
-			Status: "submitted",
-		},
-	}
-
-	session := connectTestClient(t, nil, &mockStatus{}, pp, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "retopologize",
-		Arguments: map[string]any{
-			"originalTaskId": "orig-task",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	assertContentContains(t, res, "triangle mesh")
-}
-
-func TestConvertFormat_Success(t *testing.T) {
-	pp := &mockPostProc{
-		convertResult: &provider.ModelOperation{
-			TaskID: "conv-1",
-			Status: "submitted",
-		},
-	}
-
-	session := connectTestClient(t, nil, &mockStatus{}, pp, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "convert_format",
-		Arguments: map[string]any{
-			"originalTaskId": "orig-task",
-			"format":         "FBX",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-
-	assertContentContains(t, res, "Format conversion to FBX started!")
-	assertStructuredField(t, res, "taskId", "conv-1")
-}
-
-func TestStylize_Success(t *testing.T) {
-	pp := &mockPostProc{
-		stylizeResult: &provider.ModelOperation{
-			TaskID: "style-1",
-			Status: "submitted",
-		},
-	}
-
-	session := connectTestClient(t, nil, &mockStatus{}, pp, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "stylize",
-		Arguments: map[string]any{
-			"originalTaskId": "orig-task",
-			"style":          "lego",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if res.IsError {
-		t.Fatal("expected success, got error result")
+	path := filepath.Join(t.TempDir(), "mesh.glb")
+	if err := os.WriteFile(path, []byte("glTF"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-
-	assertContentContains(t, res, "Stylization (lego) started!")
-	assertStructuredField(t, res, "taskId", "style-1")
-}
-
-func TestStylize_Error(t *testing.T) {
-	pp := &mockPostProc{
-		stylizeErr: errors.New("unsupported style"),
-	}
-
-	session := connectTestClient(t, nil, &mockStatus{}, pp, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "stylize",
-		Arguments: map[string]any{
-			"originalTaskId": "task-1",
-			"style":          "bad",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if !res.IsError {
-		t.Fatal("expected error result, got success")
-	}
-	assertContentContains(t, res, "unsupported style")
-}
-
-func TestSegmentMeshAndRigCheck_Success(t *testing.T) {
-	pp := &mockPostProc{
-		segmentResult: &provider.ModelOperation{TaskID: "segment-1", Status: "submitted"},
-		rigCheckResult: &provider.RigCheckResult{
-			Riggable: true,
-			RigType:  "biped",
-		},
-	}
-	session := connectTestClient(t, nil, &mockStatus{}, pp, nil)
-
-	segment, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "segment_mesh",
-		Arguments: map[string]any{
-			"input": "task-model",
-		},
-	})
-	if err != nil {
-		t.Fatalf("segment_mesh CallTool: %v", err)
-	}
-	if segment.IsError {
-		t.Fatal("expected segment_mesh success")
-	}
-	assertStructuredField(t, segment, "taskId", "segment-1")
-
-	rigCheck, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name: "rig_check",
-		Arguments: map[string]any{
-			"input": "task-model",
-		},
-	})
-	if err != nil {
-		t.Fatalf("rig_check CallTool: %v", err)
-	}
-	if rigCheck.IsError {
-		t.Fatal("expected rig_check success")
-	}
-	assertContentContains(t, rigCheck, "biped")
-	assertStructuredField(t, rigCheck, "rigType", "biped")
-}
-
-// --- Config tool tests ---
-
-func TestListModels_Success(t *testing.T) {
-	lister := &mockModelLister{
-		models: []provider.ModelInfo{
-			{
-				Name:         "Tripo v3.1",
-				ID:           "v3.1",
-				Description:  "Latest model",
-				Capabilities: []string{"text_to_3d", "image_to_3d", "multiview_to_3d"},
-			},
-		},
-	}
-
-	session := connectTestClient(t, nil, nil, nil, lister)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "list_models",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
+	_, structured := h.mustCall(t, "upload_file", map[string]any{"path": path})
+	if token, _ := structured["file_token"].(string); !strings.HasPrefix(token, "file-") {
+		t.Fatalf("upload_file = %v", structured)
 	}
 
-	if res.IsError {
-		t.Fatal("expected success, got error result")
+	text, structured = h.mustCall(t, "list_models", map[string]any{"operation": "rig_model"})
+	if models, _ := structured["models"].([]any); len(models) != 3 || !strings.Contains(text, "v3.0-20260909") {
+		t.Fatalf("list_models = %q", text)
 	}
-
-	assertContentContains(t, res, "Built-in Model Catalog")
-	assertContentContains(t, res, "Tripo v3.1")
-	assertContentContains(t, res, "Latest model")
-}
-
-func TestGetConfig_ReturnsBackendInfo(t *testing.T) {
-	session := connectTestClient(t, nil, nil, nil, nil)
-
-	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "get_config",
-		Arguments: map[string]any{},
-	})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-
-	if res.IsError {
-		t.Fatal("expected success, got error result")
-	}
-
-	assertContentContains(t, res, "Backend: tripo")
-	assertContentContains(t, res, "Version: test-version")
-	assertStructuredField(t, res, "backend", "tripo")
-	assertStructuredField(t, res, "version", "test-version")
-}
-
-func TestListModelsNotRegistered_WhenListerNil(t *testing.T) {
-	session := connectTestClient(t, nil, nil, nil, nil)
-
-	result, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("ListTools: %v", err)
-	}
-
-	for _, tool := range result.Tools {
-		if tool.Name == "list_models" {
-			t.Error("list_models should not be registered when model lister is nil")
-		}
-	}
-}
-
-// --- Test helpers ---
-
-func assertContentContains(t *testing.T, res *mcp.CallToolResult, substr string) {
-	t.Helper()
-	for _, c := range res.Content {
-		data, err := json.Marshal(c)
-		if err != nil {
-			continue
-		}
-		if strings.Contains(string(data), substr) {
-			return
-		}
-	}
-	t.Errorf("no content entry contains %q", substr)
-}
-
-func assertStructuredField(t *testing.T, res *mcp.CallToolResult, key string, want any) {
-	t.Helper()
-	if res.StructuredContent == nil {
-		t.Fatalf("structured content is nil, expected field %q=%#v", key, want)
-	}
-
-	data, err := json.Marshal(res.StructuredContent)
-	if err != nil {
-		t.Fatalf("marshal structured content: %v", err)
+	if _, _, isErr := h.call(t, "list_models", map[string]any{"operation": "import_model"}); !isErr {
+		t.Fatal("list_models for a tool without model versions should fail")
 	}
 
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		t.Fatalf("unmarshal structured content: %v", err)
-	}
-
-	got, ok := m[key]
-	if !ok {
-		t.Errorf("structured content missing field %q", key)
-		return
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("structured content[%q] = %#v, want %#v", key, got, want)
+	text, _ = h.mustCall(t, "get_config", nil)
+	if !strings.Contains(text, h.fake.URL) || !strings.Contains(text, h.outputDir) {
+		t.Fatalf("get_config = %q", text)
 	}
 }

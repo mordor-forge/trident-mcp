@@ -2,101 +2,58 @@
 
 ## What this is
 
-Go MCP server for AI-assisted 3D model generation. Single binary (`cmd/trident-mcp/main.go`), stdio transport, currently backed by the Tripo API. The provider is behind capability interfaces in `internal/provider/interfaces.go` — generation, image generation, status/common APIs, model/mesh processing, animation, and catalog listing — so adding a new backend means implementing the relevant interfaces without touching the server layer.
+A Go MCP server (stdio, single binary) for the Tripo 3D API v3, shipped with an agent skill as a Claude Code plugin. Everything Tripo-specific lives in the deep module `internal/tripo`. `internal/server` generates MCP tools from it. Read [GLOSSARY.md](GLOSSARY.md) for the domain words: Operation, Task, Input, Output, Artifact, Model version, Catalog.
 
 ## Build and test
 
-Install the CI-pinned linter if it is not already available:
+```bash
+go build ./cmd/trident-mcp
+go test ./... -count=1        # unit tests; no API key, no network
+go vet ./...
+golangci-lint run             # CI pins v2.11.4, default config (no .golangci.yml)
+go run golang.org/x/vuln/cmd/govulncheck@latest ./...   # advisory in CI
+```
+
+Install the pinned linter with `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.11.4`. CI gates build → tests → vet → lint.
+
+Go checks packages, not files. For one changed file, run `gofmt -w <file>` and `go test ./<its package> -count=1`. Validate Mermaid blocks in Markdown with `mmdc -i block.mmd -o /tmp/out.svg`.
+
+### Live API
 
 ```bash
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.11.4
+TRIPO_API_KEY=tsk_... go test -tags=e2e -run TestE2E_ ./internal/tripo/ -v               # free calls only
+TRIPO_API_KEY=tsk_... TRIPO_E2E_SPEND=1 go test -tags=e2e -run TestE2E_SpendingLifecycle ./internal/tripo/ -v -timeout 30m   # ~80 credits
 ```
 
-```bash
-go build ./cmd/trident-mcp        # build the binary
-go test ./... -count=1             # unit tests (no API key needed)
-go vet ./...                       # static analysis
-golangci-lint run                  # lint (CI uses v2.11.4)
-go run golang.org/x/vuln/cmd/govulncheck@latest ./... # security scan
-```
+The spending run checks the balance first. Run it after changing request shapes, output parsing or the Catalog, and only with the user's go-ahead, because it spends their credits. CI runs only the free e2e calls, on pushes to `main`.
 
-CI gates build -> unit tests -> vet -> golangci-lint. CI also runs `govulncheck` in advisory mode.
+## Change recipes
 
-### Single-file verification
+- **New Tripo endpoint:**
+  1. Add a request type and an `Operation` in `internal/tripo/operations.go`.
+  2. Add `addOperation(s, tripo.X)` in `internal/server/server.go`.
+  3. Add a row in `docs/MCP_TOOLS.md`; `TestDocs_DescribeEveryTool` fails until it exists.
+  4. Add a table case in `internal/tripo/operations_test.go` and in `internal/server/server_test.go`; `TestServer_ListsTheWholeSurface` lists every tool name.
+- **New parameter:** add one field. Its `json` tag is Tripo's exact snake_case field name (ADR-0005). Add a `jsonschema` description for agents, and an `enum:"a,b"` tag when Tripo documents a fixed set. Pointer types (`*bool`, `*int`) keep `false` and `0` sendable.
+- **Cross-field rule** (e.g. "fast needs v3.5"): add it to the Operation's `check` func, only when Tripo documents it. Local checks exist to fail before credits are spent.
+- **New or retired model version:** edit `catalog` in `internal/tripo/catalog.go`. `Rejects` lists the fields the version refuses, `DefaultFor` names the Operations it is the default for, and `CatalogDate` must be bumped. Retired entries are deleted rather than kept with a warning.
+- **New output kind:** usually nothing to do. Any `*_url` field in a Task's Output becomes a downloadable Artifact. Add the extension to `knownFormats` in `download.go` if detection falls back to `.bin`.
+- **Skill change:** edit `skills/tripo-3d/`. Keep model and price facts in its `references/` with a date. The skill reads `list_models` for anything the Catalog already knows.
 
-Go type-checks packages rather than standalone files. For a single changed Go file, verify the containing package before running the full gate:
+## Conventions
 
-```bash
-gofmt -w internal/provider/tripo/generation.go
-golangci-lint run internal/provider/tripo/generation.go
-go test ./internal/provider/tripo -run '^$'       # package type-check/compile
-go test ./internal/provider/tripo -run TestTextToModel_WithOptions -count=1
-```
+- Tests cross the real seams. `tripotest` is the fake Tripo API; server tests use an in-memory MCP client in front of the real `tripo.Client`. Mocks of Go interfaces are not used (ADR-0004).
+- `main.version` is stamped by GoReleaser via `-ldflags`; dev builds report `dev`. Builds use `CGO_ENABLED=0`.
+- Design notes: changing the task lifecycle, uploads, downloads, error handling or the Catalog's semantics means updating [docs/design/tripo-module.md](docs/design/tripo-module.md) and the relevant ADR in `docs/adr/`.
 
-For Markdown files with Mermaid diagrams, extract each fenced `mermaid` block to a temporary `.mmd` file and run:
+## Environment
 
-```bash
-mmdc -i /tmp/diagram.mmd -o /tmp/diagram.svg
-```
-
-### E2E tests
-
-E2E tests are behind a build tag and require a live Tripo key:
-
-```bash
-TRIPO_API_KEY=tsk_... go test -tags=e2e -run "TestE2E_" ./internal/provider/tripo/ -v -timeout 10m
-TRIPO_API_KEY=tsk_... TRIPO_E2E_GENERATE=1 go test -tags=e2e -run TestE2E_TextToModelLifecycle ./internal/provider/tripo/ -v -timeout 10m
-TRIPO_API_KEY=tsk_... TRIPO_E2E_FULL=1 go test -tags=e2e -run TestE2E_FullV3CreationMatrix ./internal/provider/tripo/ -v -timeout 10m
-```
-
-The default e2e path checks balance/usage and uploads a tiny file. `TRIPO_E2E_GENERATE=1` and `TRIPO_E2E_FULL=1` spend credits after balance gating. E2E only runs in CI on pushes to `main` (not on PRs).
-
-## Project structure
-
-```
-cmd/trident-mcp/main.go    – entrypoint, wires config → provider → server
-internal/
-  config/                   – env-var loading (TRIPO_API_KEY, MODEL_OUTPUT_DIR)
-  provider/
-    interfaces.go           – provider capability interfaces
-    types.go                – shared request/response types
-    tripo/                  – Tripo v3 API implementation + unit tests + e2e_test.go
-  server/
-    server.go               – MCP server setup, tool registration, stdio runner
-    tools_generation.go     – generation, status/download, batch task, account, and file upload handlers
-    tools_image.go          – text_to_image, image_to_image, multiview image, splat handlers
-    tools_postprocess.go    – retopologize, convert_format, stylize handlers
-    tools_v3_processing.go  – import/refine/texture, mesh, rigging, animation handlers
-    tools_config.go         – list_models, get_config handlers
-skills/                     – optional companion agent skills (not part of the server)
-```
-
-## Key conventions
-
-- **Version stamping**: `main.version` is set via `-ldflags` by GoReleaser at release time. During dev builds it defaults to `"dev"`. Don't hardcode version strings.
-- **No golangci-lint config file**: CI uses `golangci-lint run` with default settings (v2.11.4). No `.golangci.yml` in the repo.
-- **CGO disabled**: both Dockerfile and GoReleaser set `CGO_ENABLED=0`.
-- **Tool registration is conditional**: tools only register when their backing interface is non-nil (see `server.go:66-76`). Tests can pass `nil` for unused interfaces.
-- **Design docs track boundaries**: when changing provider interfaces, task lifecycle semantics, model catalog behavior, upload/download behavior, or tool registration rules, review and update `docs/design/provider-boundaries.md` and the relevant ADR.
-
-## Pattern references
-
-- **New MCP tool**: follow the pattern in `internal/server/tools_generation.go` for registration/handlers and `internal/provider/tripo/generation.go` for provider request mapping.
-- **New async Tripo endpoint**: see `internal/provider/tripo/v3_features.go` for task creation and `internal/server/tools_v3_processing.go` for tool handlers.
-- **Generation request option**: follow the pattern in `internal/provider/tripo/generation.go`; translate MCP camelCase fields to Tripo snake_case payload keys in the provider layer.
-- **Format or post-processing option**: follow the pattern in `internal/provider/tripo/postprocess.go`; validate known enums locally before making credit-spending API calls.
-- **Model catalog update**: see `internal/provider/tripo/models.go` for aliases and static catalog entries, then update `docs/MCP_TOOLS.md`.
-- **Agent skill update**: use `skills/3d-gen/SKILL.md` as a template when the preferred workflow, tool sequence, or live API caveat changes.
-- **Longer examples**: see `docs/patterns/common-changes.md` for copy-modify checklists.
-
-## Environment variables
-
-| Variable | Required | Default | Notes |
-|---|---|---|---|
-| `TRIPO_API_KEY` | Yes (runtime) | — | Server refuses to start without it |
-| `TRIPO_BASE_URL` | No | `https://openapi.tripo3d.ai/v3` | Override for private deployments/tests |
-| `MODEL_OUTPUT_DIR` | No | `~/generated_models` | Created automatically if missing |
+| Variable | Default | Notes |
+|---|---|---|
+| `TRIPO_API_KEY` | required | `TRIDENT_TRIPO_API_KEY` (set by the plugin) takes precedence |
+| `TRIPO_BASE_URL` | `https://openapi.tripo3d.ai/v3` | China-region keys need `https://openapi.tripo3d.com/v3` |
+| `MODEL_OUTPUT_DIR` | `~/generated_models` | Artifacts go to `<dir>/<task_id>/`; created if missing |
 
 ## Release
 
-Tag with `vX.Y.Z` and push. CI runs the full test job (build, unit tests, vet, lint, plus advisory `govulncheck`), then GoReleaser builds cross-platform binaries (linux/darwin/windows, amd64/arm64).
+Tag `vX.Y.Z` and push. CI runs the test job, then GoReleaser builds linux, darwin and windows binaries for amd64 and arm64. Bump `version` in `.claude-plugin/plugin.json` to match.

@@ -1,69 +1,65 @@
 # Common Change Patterns
 
-These examples are written for agents making copy-modify changes. Keep this file in sync with `AGENTS.md` when common workflows change.
+Worked examples for the recipes in [AGENTS.md](../../AGENTS.md#change-recipes).
 
-## New MCP Tool
+## Add a parameter Tripo just shipped
 
-Reference implementation:
+Say Tripo adds `symmetry_axis` (`x`, `y` or `z`) to `/models/convert`. Add one field to `ConvertModelRequest` in `internal/tripo/operations.go`:
 
-- Pattern in `internal/server/tools_generation.go`
-- Provider mapping in `internal/provider/tripo/generation.go`
-- Request types in `internal/provider/types.go`
-- Server tests in `internal/server/server_test.go`
+```go
+SymmetryAxis string `json:"symmetry_axis,omitempty" enum:"x,y,z" jsonschema:"Axis to mirror across when force_symmetry is set"`
+```
 
-Checklist:
+From that one field:
 
-1. Add the request/response shape to `internal/provider/types.go`.
-2. Add a provider interface method only when a new capability family is needed.
-3. Implement the concrete Tripo request in the provider package.
-4. Register the MCP tool in the matching `internal/server/tools_*.go` file.
-5. Add `httptest` coverage for the Tripo payload.
-6. Add an MCP server test for registration and handler behavior.
-7. Update [MCP_TOOLS.md](../MCP_TOOLS.md) and any affected skill.
+- The MCP schema shows the field with its enum and description.
+- The SDK and `Submit` both validate it.
+- It is sent to Tripo as `symmetry_axis`.
 
-## New Tripo v3 Processing Endpoint
+To finish, add the key to the `convert_model` case in `TestOperations_SendTripoPayloads`.
 
-Reference implementation:
+## Add an endpoint
 
-- See `internal/provider/tripo/v3_features.go` for model, mesh, account, upload, and animation APIs.
-- See `internal/server/tools_v3_processing.go` for matching MCP handlers.
+Say Tripo ships `POST /mesh/repair` that returns a mesh:
 
-Checklist:
+```go
+// internal/tripo/operations.go
+RepairMesh = Operation[RepairMeshRequest]{
+	Name: "repair_mesh", Path: "/mesh/repair", Produces: ProducesMesh,
+	Description: "Close holes and fix non-manifold geometry in a mesh.",
+}
 
-1. Keep upstream task creation asynchronous and return `ModelOperation`.
-2. Preserve the shared poll/download lifecycle.
-3. Validate local enums when a bad value would otherwise spend credits.
-4. Keep Tripo-specific snake_case inside the provider layer.
-5. Add tests before implementation for request path, method, and body shape.
+type RepairMeshRequest struct {
+	Input Input `json:"input" jsonschema:"Task ID of the mesh (or a file token / URL)"`
+}
+```
 
-## Model Catalog Update
+Then:
 
-Reference implementation:
+1. Add `addOperation(s, tripo.RepairMesh)` in `internal/server/server.go`.
+2. Add `repair_mesh` to `operationTools` in `internal/server/server_test.go`, with a `TestOperationTools_ReachTripo` case.
+3. Add a case to `TestOperations_SendTripoPayloads`.
+4. Add a row to `docs/MCP_TOOLS.md`.
 
-- Pattern in `internal/provider/tripo/models.go`
-- Public docs in [MCP_TOOLS.md](../MCP_TOOLS.md#models)
-- Agent defaults in `skills/3d-gen/SKILL.md`
+If the endpoint takes a `model`, add catalog entries with `DefaultFor: []string{"repair_mesh"}`. `TestCatalog_DefaultsAndFilters` lists every Operation that needs a default.
 
-Checklist:
+## Add a model version
 
-1. Add the catalog entry with namespace, API version, capabilities, aliases, and default marker if applicable.
-2. Add aliases only when they are unambiguous.
-3. Let multiview support derive from the capability list.
-4. Add tests for model resolution and `list_models`.
-5. Update agent-facing docs when defaults or live caveats change.
+Say Tripo ships P3. Add one entry to `catalog` in `internal/tripo/catalog.go`:
 
-## Documentation And Skill Updates
+```go
+{ID: "P3-20270115", Name: "Tripo P3", Family: "3d", Aliases: []string{"p3", "tripo-p3"}, Stage: "preview",
+	Rejects:     []string{"smart_low_poly", "generate_parts", "geometry_quality"},
+	Description: "…"},
+```
 
-Reference implementation:
+Then:
 
-- README as the short navigation entry point.
-- `docs/` for detailed reference.
-- `skills/*/SKILL.md` for optional client-side workflow guidance.
+1. Bump `CatalogDate`.
+2. If it becomes the default, move `DefaultFor` to it.
+3. Update the model guidance in `skills/tripo-3d/references/models-and-costs.md`.
+4. Run the spending e2e if the request shape changed.
 
-Checklist:
+## Retire something
 
-1. Keep README concise and link to focused docs.
-2. Update `AGENTS.md` for repository workflow, verification, and common patterns.
-3. Update ADRs when changing architecture or lasting trade-offs.
-4. Validate Mermaid diagrams with `mmdc`.
-5. Run `agentready assess . -o .agentready` and keep generated reports local.
+Delete the Operation or catalog entry. Then list it under "Not exposed" in `docs/MCP_TOOLS.md` with the reason, so agents stop looking for it.
