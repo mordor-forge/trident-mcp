@@ -14,7 +14,7 @@ trident-mcp exposes the Tripo 3D API (v3) as MCP tools. Argument names are Tripo
   - a task ID.
 
   Local uploads are limited to images (png, jpg, webp; up to 20 MB) and meshes (glb, gltf, fbx, obj, stl, 3mf, usdz; up to 150 MB). Files over 50 MB use a presigned upload.
-- **Output URLs expire about five minutes after Tripo issues them.** `download_task` and `wait_for_task` re-fetch the task before downloading, so they are always fresh.
+- **Output URLs are signed and expire.** Tripo's docs say minutes; the live run below saw 24 hours. `download_task` and `wait_for_task` re-fetch the task before downloading, so the URLs they use are always fresh.
 - **Downloads keep the task's real format.** Use `convert_model` to get another format, then download that task.
 - **Model versions resolve through a static catalog.** Aliases (`p1`, `v3.1`, `rig-v3.0`, ...) map to dated IDs. A missing `model` becomes the tool's default. A field the chosen version rejects is dropped when unset and refused when set; for example, `quad: true` on P1 fails before any credits are spent. Unknown versions are passed through with a warning.
 - **Errors carry Tripo's code, message, suggestion and request ID.** Rate limits (HTTP 429) are retried automatically after the `Retry-After` delay. Nothing else is retried, so a create call is never billed twice.
@@ -88,6 +88,7 @@ trident-mcp exposes the Tripo 3D API (v3) as MCP tools. Argument names are Tripo
 
 - **Model versions.** Tripo rejects unknown 3D versions such as `tripo-turbo` with code 1004 before charging anything, and its error lists exactly the catalog's five 3D versions. `banana` and `seedream_v4` are accepted image model names.
 - **text_to_image** (seedream_v4, 2048 px): 5 credits; output `generated_image_url` (PNG).
+- **Signed output URLs** (`tripo-data.rg1.data.tripo3d.com`, CloudFront policy) were valid for 24 hours.
 - **text_to_model** (H3.1, no texture): 10 credits, about 70 s. Outputs are `model_url` (GLB, about 40 MB untextured), `rendered_image_url` (WebP preview) and `generated_image_url` (the intermediate reference image).
 - **image_to_multiview**: 10 credits. The view URLs are nested under `generate_multiview_image` (`front_view_url`, ...); downloads flatten them to `front_view`, `left_view`, and so on.
 - **rig_check**: an asynchronous, free task whose output is `{riggable, rig_type}`.

@@ -72,7 +72,7 @@ Prompts for `text_to_model` and `text_to_image`:
 
 ## Rules
 
-- **Outputs.** Use `wait_for_task` or `trident:download_task` to save outputs; `get_task` URLs expire after about five minutes. Downloads keep the task's format. `trident:convert_model` makes other formats.
+- **Outputs.** Use `wait_for_task` or `trident:download_task` to save outputs; `get_task` URLs are signed and expire. Downloads keep the task's format. `trident:convert_model` makes other formats.
 - **Local validation.** An argument error comes back before any credits are spent. Read it, fix that argument, and retry.
 - **Parts.** `generate_parts` needs `texture: false` and `pbr: false`. For parts with textures, generate normally, then use `trident:segment_mesh` and `trident:complete_mesh`.
 - **Rigging.** Run `trident:rig_check` first. It is free and returns `riggable` and `rig_type`. Then run `trident:rig_model`: `v3.0-20260909` for humanoids, `v2.5-20260210` for animals and creatures. Retargeting takes preset names like `preset:walk`.

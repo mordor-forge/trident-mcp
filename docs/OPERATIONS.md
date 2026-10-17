@@ -11,6 +11,8 @@
 
 The server speaks MCP over stdio and opens no port.
 
+Use your own Tripo key, one per person. [Tripo's terms](https://www.tripo3d.ai/terms) forbid sharing API keys, and they require Tripo's written authorization before the service is made available to third parties. A shared, multi-user deployment behind one key therefore needs Tripo's approval.
+
 ## Install
 
 - **Claude Code plugin.** Put the `trident-mcp` binary on your `PATH` (a release archive or `go install`), then:

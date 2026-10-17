@@ -42,6 +42,7 @@ Primary assumptions:
 | T5 | Downloaded model exploits a downstream viewer/importer | remote artifact source | local code execution in external tool | low to medium | documented operational risk |
 | T6 | Format confusion causes a user to open an unexpected artifact type | remote artifact source | workflow error or unsafe import | medium | mitigated by format inference and conversion guidance |
 | T7 | Static model catalog drifts from live Tripo support | upstream API change | failed tasks, wasted time | high | mitigated: unknown versions pass through with a warning, `CatalogDate` is reported by `get_config`/`list_models`, and the spending e2e logs live response shapes |
+| T8 | A shared deployment serves other people through one Tripo key | operator | breach of Tripo's terms (§2.1(b), §3.2), key revocation | low | documented: one key per person; hosted or shared use needs Tripo's written authorization |
 
 ## 5. Deprioritized Threats
 

@@ -154,8 +154,8 @@ func checkTaskID(id string) error {
 	return nil
 }
 
-// GetTask fetches a Task. Output URLs in the result expire about five minutes
-// after they are issued.
+// GetTask fetches a Task. Output URLs in the result are signed and expire;
+// Download re-fetches the Task for fresh ones.
 func (c *Client) GetTask(ctx context.Context, id string) (*Task, error) {
 	if err := checkTaskID(id); err != nil {
 		return nil, err

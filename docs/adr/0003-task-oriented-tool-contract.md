@@ -26,5 +26,5 @@ Model task-creating tools around `ModelOperation`, expose `task_status` / `get_t
 The contract still holds: task-creating tools return a task ID at once. Three things changed:
 
 - Polling is `get_task` and `get_tasks`. The duplicate `task_status` tool is gone.
-- `wait_for_task` adds an opt-in blocking step. It polls with progress notifications and saves the outputs before their roughly five-minute URLs expire.
+- `wait_for_task` adds an opt-in blocking step. It polls with progress notifications and saves the outputs while their signed URLs are still valid.
 - `download_model` became `download_task`. It saves every output of a task (meshes, images, views, splats), not only the mesh, and it still never converts formats.

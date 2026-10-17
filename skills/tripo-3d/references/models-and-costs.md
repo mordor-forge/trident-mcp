@@ -1,6 +1,6 @@
 # Models and costs
 
-Prices are in Tripo credits (1 credit = US$0.01), from Tripo's pricing page as of 2026-10-17. A task's `credits_consumed` is the authoritative cost. Credits are frozen when a task starts and refunded if it fails. `trident:list_models` lists the model versions the server knows.
+Prices are in Tripo credits (1 credit = US$0.01), summarized from [Tripo's pricing page](https://developers.tripo3d.ai/en/pricing) as of 2026-10-17. That page is authoritative. A task's `credits_consumed` is the authoritative cost. Credits are frozen when a task starts and refunded if it fails. `trident:list_models` lists the model versions the server knows.
 
 ## 3D generation
 

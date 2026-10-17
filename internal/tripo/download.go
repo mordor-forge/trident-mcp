@@ -29,7 +29,7 @@ type Artifact struct {
 // Download saves the Output URLs of a successful Task into dir/<task_id>/,
 // one file per Output field, overwriting earlier downloads of the same Task.
 // names limits which Outputs are saved; empty means all of them. The Task is
-// fetched first because its URLs expire about five minutes after issue.
+// fetched first because its signed URLs expire.
 func (c *Client) Download(ctx context.Context, taskID, dir string, names ...string) (*Task, []Artifact, error) {
 	task, err := c.GetTask(ctx, taskID)
 	if err != nil {
@@ -88,7 +88,7 @@ func (c *Client) downloadArtifact(ctx context.Context, rawURL, dir, name string)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return Artifact{}, fmt.Errorf("HTTP %d (signed URLs expire after about five minutes; download again)", resp.StatusCode)
+		return Artifact{}, fmt.Errorf("HTTP %d (signed URLs expire; download again to get fresh ones)", resp.StatusCode)
 	}
 
 	tmp, err := os.CreateTemp(dir, "."+name+"-*.part")

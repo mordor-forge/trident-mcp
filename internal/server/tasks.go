@@ -55,7 +55,7 @@ func (s *Server) registerTaskTools() {
 	}, s.handleWait)
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "get_task",
-		Description: "Get a Tripo task's status, progress, outputs and error. Output URLs expire about five minutes after they are issued; use download_task to save them.",
+		Description: "Get a Tripo task's status, progress, outputs and error. Output URLs are signed and expire; use download_task to save them.",
 		Annotations: readOnly,
 	}, s.handleGetTask)
 	mcp.AddTool(s.mcp, &mcp.Tool{

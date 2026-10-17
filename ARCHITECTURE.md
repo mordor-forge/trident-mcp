@@ -73,7 +73,7 @@ sequenceDiagram
 - **One adapter, so no Go-interface seam** (ADR-0004). The server depends on `*tripo.Client`. Tests swap the HTTP transport (`tripotest`), not Go types, so one test covers argument decoding, payload encoding and output parsing together.
 - **Arguments mirror Tripo's field names** (ADR-0005). A request struct's `json` tags are the MCP schema and the Tripo payload at once, `enum` tags feed the schema and validation, and `catalog` tags resolve version fields. Adding a Tripo parameter means adding one field.
 - **The catalog is static** (ADR-0002). It never calls Tripo for discovery. Unknown versions still go through with a warning, so new Tripo models work before the catalog is updated.
-- **Tasks are asynchronous** (ADR-0003). Create tools never block. `wait_for_task` is the opt-in blocking step and saves outputs before their five-minute URLs expire.
+- **Tasks are asynchronous** (ADR-0003). Create tools never block. `wait_for_task` is the opt-in blocking step and saves the outputs while their signed URLs are still valid.
 - **Outputs are kept verbatim.** `Task.Output` is Tripo's map. Every `*_url` field, including nested ones, becomes a downloadable Artifact, so new output types need no code.
 
 ## Testing

@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![trident-mcp MCP server](https://glama.ai/mcp/servers/mordor-forge/trident-mcp/badges/score.svg)](https://glama.ai/mcp/servers/mordor-forge/trident-mcp)
 
-An MCP server for the [Tripo 3D](https://www.tripo3d.ai) API that covers the whole v3 surface. Agents can:
+An unofficial MCP server for the [Tripo 3D](https://www.tripo3d.ai) API that covers the whole v3 surface. Agents can:
 
 - generate meshes from text, one image or several views;
 - make reference images and multiview sets;
@@ -71,6 +71,16 @@ Arguments use Tripo's own field names, so [Tripo's docs](https://developers.trip
 | Decisions | [docs/adr/](docs/adr/) |
 | Security | [SECURITY.md](SECURITY.md), [THREAT_MODEL.md](THREAT_MODEL.md) |
 
+## Tripo terms and trademarks
+
+trident-mcp is an independent project. It is not affiliated with or endorsed by Tripo, VAST or Holymolly Ltd, and "Tripo" is a trademark of its owner. Your use of the Tripo API is governed by [Tripo's terms](https://www.tripo3d.ai/terms). Under them:
+
+- Use your own API key, and keep it private.
+- Tripo's written authorization is required before offering a shared or hosted deployment to other people.
+- Ownership of generated models depends on your Tripo plan.
+
+Credit prices quoted in the docs and skill are dated summaries; [Tripo's pricing page](https://developers.tripo3d.ai/en/pricing) is authoritative.
+
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE). The license covers this repository's code, not Tripo's service or the models you generate.
