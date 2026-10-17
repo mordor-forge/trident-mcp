@@ -58,4 +58,10 @@ TRIPO_API_KEY=tsk_... TRIPO_E2E_SPEND=1 go test -tags=e2e -run TestE2E_SpendingL
 
 ## Release
 
-Tag `vX.Y.Z` and push. CI runs the test job, then GoReleaser publishes linux, darwin and windows binaries for amd64 and arm64. `main.version` is stamped through `-ldflags`. Bump `.claude-plugin/plugin.json` `version` in the same commit.
+1. Run `scripts/sync-version.sh X.Y.Z`, commit, then tag `vX.Y.Z` and push.
+2. `release.yml` verifies tests and that the manifest versions match the tag.
+3. GoReleaser publishes linux, darwin and windows binaries for amd64 and arm64. Each archive also holds `LICENSE`, `README.md`, `.claude-plugin/plugin.json` and `skills/`, so an extracted archive is a plugin directory.
+4. Build provenance is attested.
+5. `ghcr.io/mordor-forge/trident-mcp` gets a multi-arch distroless image with SBOM and provenance.
+
+`main.version` is stamped through `-ldflags`.

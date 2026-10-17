@@ -1,6 +1,8 @@
 module github.com/mordor-forge/trident-mcp
 
-go 1.25.12
+go 1.26.0
+
+toolchain go1.26.9
 
 require (
 	github.com/google/jsonschema-go v0.4.2

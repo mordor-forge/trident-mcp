@@ -53,6 +53,7 @@ func TestLoad_OutputDirDefaultsAndExpands(t *testing.T) {
 	clearEnv(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
 	t.Setenv("TRIPO_API_KEY", "tsk_env")
 
 	cfg, err := Load()

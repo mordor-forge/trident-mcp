@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- Go 1.25+
-- `golangci-lint` v2.11.4: `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.11.4`
+- Go 1.26+
+- `golangci-lint` v2.14.0: `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.14.0`
 - `TRIPO_API_KEY`, only to run the server or the live e2e tests
 - Optional: `mmdc` (mermaid-cli) for diagram checks
 
@@ -20,10 +20,12 @@ go build ./cmd/trident-mcp
 go test ./... -count=1
 go vet ./...
 golangci-lint run
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+python3 scripts/validate-skills.py skills
+scripts/validate-packaging.sh
 ```
 
-CI gates build, tests, vet and lint. `govulncheck` is advisory.
+CI runs all of these, with `-race` on Linux and unit tests on macOS and Windows too.
 
 ## Where things go
 

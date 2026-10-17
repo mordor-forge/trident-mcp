@@ -10,7 +10,16 @@
   "homepage": "https://github.com/mordor-forge/trident-mcp#readme",
   "repository": "https://github.com/mordor-forge/trident-mcp",
   "license": "Apache-2.0",
-  "keywords": ["mcp", "tripo", "3d", "text-to-3d", "image-to-3d", "rigging", "game-assets", "3d-printing"],
+  "keywords": [
+    "mcp",
+    "tripo",
+    "3d",
+    "text-to-3d",
+    "image-to-3d",
+    "rigging",
+    "game-assets",
+    "3d-printing"
+  ],
   "userConfig": {
     "tripo_api_key": {
       "type": "string",

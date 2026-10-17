@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -195,6 +196,9 @@ func TestDownload_LeavesNoPartialFiles(t *testing.T) {
 }
 
 func TestDownload_FilesAreReadableByOthers(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits")
+	}
 	fake := tripotest.New(t)
 	fake.Succeed("p", map[string]any{"model_url": fake.AddFile("m.glb", "model/gltf-binary", []byte("glTF"))})
 	_, artifacts, err := fake.Client(t).Download(context.Background(), "p", t.TempDir())

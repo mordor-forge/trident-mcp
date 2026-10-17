@@ -10,11 +10,12 @@ A Go MCP server (stdio, single binary) for the Tripo 3D API v3, shipped with an 
 go build ./cmd/trident-mcp
 go test ./... -count=1        # unit tests; no API key, no network
 go vet ./...
-golangci-lint run             # CI pins v2.11.4, default config (no .golangci.yml)
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...   # advisory in CI
+golangci-lint run             # CI pins v2.14.0, default config (no .golangci.yml)
+go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+python3 scripts/validate-skills.py skills && scripts/validate-packaging.sh   # skill spec + plugin manifest
 ```
 
-Install the pinned linter with `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.11.4`. CI gates build → tests → vet → lint.
+Install the pinned linter with `go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.14.0`. CI runs tests on Linux (with `-race`), macOS and Windows, plus lint, govulncheck, gofmt, and skill and plugin validation.
 
 Go checks packages, not files. For one changed file, run `gofmt -w <file>` and `go test ./<its package> -count=1`. Validate Mermaid blocks in Markdown with `mmdc -i block.mmd -o /tmp/out.svg`.
 
@@ -56,4 +57,4 @@ The spending run checks the balance first. Run it after changing request shapes,
 
 ## Release
 
-Tag `vX.Y.Z` and push. CI runs the test job, then GoReleaser builds linux, darwin and windows binaries for amd64 and arm64. Bump `version` in `.claude-plugin/plugin.json` to match.
+Run `scripts/sync-version.sh X.Y.Z` (it updates the plugin manifest and the skill metadata), commit, then tag `vX.Y.Z` and push. `.github/workflows/release.yml` checks that the versions match the tag, then runs GoReleaser (linux, darwin and windows binaries for amd64 and arm64; the archives double as plugin directories), attests build provenance, and pushes a multi-arch image to `ghcr.io`.
