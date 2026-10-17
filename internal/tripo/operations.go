@@ -30,7 +30,12 @@ var (
 	TextToImage = Operation[TextToImageRequest]{
 		Name: "text_to_image", Path: "/generation/text-to-image", Produces: ProducesImage,
 		Description: "Generate a reference image from a text prompt. Its task ID can be passed directly as image_to_model input.",
-		check:       func(r *TextToImageRequest, _ string) error { return checkTransparency(r.Background, r.OutputFormat) },
+		check: func(r *TextToImageRequest, model string) error {
+			if r.Watermark != nil && !strings.HasPrefix(model, "seedream") && knownImageModel(model) {
+				return fmt.Errorf("watermark is a seedream option; %s does not take it", model)
+			}
+			return r.check(model)
+		},
 	}
 	ImageToImage = Operation[ImageToImageRequest]{
 		Name: "image_to_image", Path: "/generation/image-to-image", Produces: ProducesImage,
@@ -47,6 +52,11 @@ var (
 		check: func(r *EditMultiviewRequest, _ string) error {
 			if len(r.Prompts) == 0 || len(r.Prompts) > 4 {
 				return fmt.Errorf("prompts takes 1-4 per-view edits, got %d", len(r.Prompts))
+			}
+			for i, p := range r.Prompts {
+				if strings.TrimSpace(p.Prompt) == "" {
+					return fmt.Errorf("prompts[%d].prompt is empty", i)
+				}
 			}
 			return nil
 		},
@@ -158,6 +168,9 @@ func (g *GenerationOptions) check(string) error {
 	if isTrue(g.GenerateParts) && (!isFalse(g.Texture) || !isFalse(g.PBR)) {
 		return errors.New("generate_parts requires texture false and pbr false")
 	}
+	if isTrue(g.GenerateParts) && (isTrue(g.Quad) || isTrue(g.SmartLowPoly)) {
+		return errors.New("generate_parts cannot be combined with quad or smart_low_poly: Tripo ignores quad and produces no parts with smart_low_poly")
+	}
 	return nil
 }
 
@@ -252,19 +265,67 @@ type ImageToImageRequest struct {
 	ImageOptions
 }
 
-func checkImageToImage(r *ImageToImageRequest, _ string) error {
+func checkImageToImage(r *ImageToImageRequest, model string) error {
 	if r.Input == "" && len(r.Inputs) == 0 {
 		return errors.New("input or inputs is required")
 	}
 	if r.Prompt == "" && r.Template == "" {
 		return errors.New("prompt is required unless template is set")
 	}
-	return checkTransparency(r.Background, r.OutputFormat)
+	if limit := referenceLimit(model); limit > 0 && len(r.Inputs) > limit {
+		return fmt.Errorf("%s takes up to %d reference images, got %d", model, limit, len(r.Inputs))
+	}
+	return r.check(model)
 }
 
-func checkTransparency(background, format string) error {
-	if background == "transparent" && format != "" && format != "png" {
+// referenceLimit is how many inputs image_to_image accepts per model family;
+// zero means unknown.
+func referenceLimit(model string) int {
+	switch {
+	case strings.HasPrefix(model, "seedream"):
+		return 4
+	case strings.HasPrefix(model, "banana"):
+		return 10
+	case strings.HasPrefix(model, "chat_image"):
+		return 16
+	default:
+		return 0
+	}
+}
+
+func knownImageModel(model string) bool {
+	_, ok := lookupModel("text_to_image", model)
+	if !ok {
+		_, ok = lookupModel("image_to_image", model)
+	}
+	return ok
+}
+
+// check validates the options each image model family supports. Models the
+// Catalog does not know are left to Tripo.
+func (o *ImageOptions) check(model string) error {
+	if o.Background == "transparent" && o.OutputFormat != "" && o.OutputFormat != "png" {
 		return errors.New("background transparent requires output_format png")
+	}
+	if !knownImageModel(model) {
+		return nil
+	}
+	chat25 := strings.HasPrefix(model, "chat_image_2.5")
+	switch {
+	case o.Quality != "" && !strings.HasPrefix(model, "chat_image"):
+		return fmt.Errorf("quality only applies to chat_image models, not %s", model)
+	case (o.Quality == "xhigh" || o.Quality == "max") && !chat25:
+		return fmt.Errorf("quality %s needs a chat_image_2.5 model", o.Quality)
+	case o.Background != "" && !chat25:
+		return fmt.Errorf("background only applies to chat_image_2.5 models, not %s", model)
+	case o.AspectRatio != "" && !strings.HasPrefix(model, "banana"):
+		return fmt.Errorf("aspect_ratio only applies to banana models, not %s; use size", model)
+	}
+	switch o.AspectRatio {
+	case "1:8", "1:4", "4:1", "8:1":
+		if model != "banana2" {
+			return fmt.Errorf("aspect_ratio %s needs banana2", o.AspectRatio)
+		}
 	}
 	return nil
 }
@@ -323,11 +384,13 @@ func checkTexture(r *TextureModelRequest, model string) error {
 				given++
 			}
 		}
-		if given > 1 {
-			return errors.New("texture_prompt takes one of text, image or images")
-		}
-		if len(p.Images) > 4 {
-			return errors.New("texture_prompt.images takes up to 4 views")
+		switch {
+		case given != 1:
+			return errors.New("texture_prompt takes exactly one of text, image or images")
+		case p.StyleImage != "" && p.Text == "":
+			return errors.New("texture_prompt.style_image goes together with text")
+		case len(p.Images) > 0 && len(p.Images) != 4:
+			return fmt.Errorf("texture_prompt.images takes exactly 4 views (front, left, back, right), got %d", len(p.Images))
 		}
 	}
 	if r.TextureQuality == "fast" && model != "v3.5-20260815" {
@@ -359,8 +422,8 @@ type ConvertModelRequest struct {
 }
 
 func checkConvert(r *ConvertModelRequest, _ string) error {
-	if isTrue(r.Quad) && r.Format == "GLTF" {
-		return errors.New("quad output is FBX; it cannot be combined with format GLTF")
+	if isTrue(r.Quad) && r.Format != "FBX" {
+		return fmt.Errorf("quad output is always FBX; set format FBX (got %s)", r.Format)
 	}
 	if isTrue(r.ForceSymmetry) && !isTrue(r.Quad) {
 		return errors.New("force_symmetry requires quad")
@@ -422,6 +485,9 @@ type RigModelRequest struct {
 }
 
 func checkRig(r *RigModelRequest, model string) error {
+	if r.Spec != "" && r.Spec != "tripo" && r.RigType != "" && r.RigType != "biped" {
+		return fmt.Errorf("spec %s only applies to biped rigs, not rig_type %s", r.Spec, r.RigType)
+	}
 	if model == "v1.0-20240301" {
 		if r.RigType != "" && r.RigType != "biped" {
 			return fmt.Errorf("rig v1.0-20240301 only rigs bipeds; use model v2.5-20260210 or v3.0-20260909 for rig_type %s", r.RigType)

@@ -41,74 +41,74 @@ func TestOperations_SendTripoPayloads(t *testing.T) {
 	fake := tripotest.New(t)
 	cases := []struct {
 		name string
-		run  func() *tripo.Submission
+		run  func(t *testing.T) *tripo.Submission
 		path string
 		want map[string]any
 	}{
-		{"text_to_model", func() *tripo.Submission {
+		{"text_to_model", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.TextToModel, tripo.TextToModelRequest{Prompt: "a brass lantern", GenerationOptions: tripo.GenerationOptions{
 				FaceLimit: ptr(8000), TextureQuality: "detailed", Texture: ptr(true), ExportOrientation: "+y",
 			}})
 		}, "/generation/text-to-model", map[string]any{
 			"prompt": "a brass lantern", "model": "v3.1-20260211", "face_limit": 8000.0, "texture_quality": "detailed", "texture": true, "export_orientation": "+y",
 		}},
-		{"image_to_model", func() *tripo.Submission {
+		{"image_to_model", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.ImageToModel, tripo.ImageToModelRequest{Input: "https://example.com/a.png", TextureAlignment: "geometry"})
 		}, "/generation/image-to-model", map[string]any{"input": "https://example.com/a.png", "texture_alignment": "geometry", "model": "v3.1-20260211"}},
-		{"text_to_image", func() *tripo.Submission {
+		{"text_to_image", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.TextToImage, tripo.TextToImageRequest{Prompt: "a sword", ImageOptions: tripo.ImageOptions{AspectRatio: "16:9", Model: "gemini-3-pro"}})
 		}, "/generation/text-to-image", map[string]any{"prompt": "a sword", "model": "banana_pro", "aspect_ratio": "16:9"}},
-		{"image_to_image", func() *tripo.Submission {
+		{"image_to_image", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.ImageToImage, tripo.ImageToImageRequest{Inputs: []tripo.Input{"task-a", "task-b"}, Prompt: "merge image[1] and image[2]"})
 		}, "/generation/image-to-image", map[string]any{"inputs": []any{"task-a", "task-b"}, "model": "seedream_v5"}},
-		{"image_to_multiview", func() *tripo.Submission {
+		{"image_to_multiview", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.ImageToMultiview, tripo.ImageToMultiviewRequest{Input: "task-img"})
 		}, "/generation/image-to-multiview", map[string]any{"input": "task-img"}},
-		{"edit_multiview", func() *tripo.Submission {
+		{"edit_multiview", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.EditMultiview, tripo.EditMultiviewRequest{Input: "task-mv", Prompts: []tripo.MultiviewEdit{{View: "back", Prompt: "add a cape"}}})
 		}, "/generation/edit-multiview", map[string]any{"input": "task-mv", "prompts": []any{map[string]any{"view": "back", "prompt": "add a cape"}}}},
-		{"image_to_splat", func() *tripo.Submission {
+		{"image_to_splat", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.ImageToSplat, tripo.ImageToSplatRequest{Input: "https://example.com/a.png", ModelSeed: ptr(7)})
 		}, "/generation/image-to-splat", map[string]any{"input": "https://example.com/a.png", "model_seed": 7.0}},
-		{"import_model", func() *tripo.Submission {
+		{"import_model", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.ImportModel, tripo.ImportModelRequest{Input: "https://example.com/a.gltf"})
 		}, "/models/import", map[string]any{"input": "https://example.com/a.gltf"}},
-		{"texture_model", func() *tripo.Submission {
+		{"texture_model", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.TextureModel, tripo.TextureModelRequest{Input: "task-mesh", Model: "v3.5", TextureQuality: "fast", Compress: "geometry",
 				TexturePrompt: &tripo.TexturePrompt{Text: "weathered bronze"}})
 		}, "/models/texture", map[string]any{"input": "task-mesh", "model": "v3.5-20260815", "texture_quality": "fast", "compress": "geometry",
 			"texture_prompt": map[string]any{"text": "weathered bronze"}}},
-		{"convert_model", func() *tripo.Submission {
+		{"convert_model", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.ConvertModel, tripo.ConvertModelRequest{Input: "task-mesh", Format: "FBX", FBXPreset: "mixamo", FlattenBottom: ptr(true), WithAnimation: ptr(false)})
 		}, "/models/convert", map[string]any{"input": "task-mesh", "format": "FBX", "fbx_preset": "mixamo", "flatten_bottom": true, "with_animation": false}},
-		{"retopologize", func() *tripo.Submission {
+		{"retopologize", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.Retopologize, tripo.RetopologizeRequest{Input: "task-mesh", Model: "v3.0", Quad: ptr(true), SmartUV: ptr(true), FaceLimit: ptr(4000)})
 		}, "/mesh/decimate", map[string]any{"input": "task-mesh", "model": "v3.0", "quad": true, "smart_uv": true, "face_limit": 4000.0}},
-		{"smart_uv", func() *tripo.Submission {
+		{"smart_uv", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.SmartUV, tripo.SmartUVRequest{Input: "task-mesh"})
 		}, "/mesh/uv", map[string]any{"input": "task-mesh", "model": "default"}},
-		{"segment_mesh", func() *tripo.Submission {
+		{"segment_mesh", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.SegmentMesh, tripo.SegmentMeshRequest{Input: "task-mesh", Model: "v2.0-20260430", SegmentationGranularity: "detailed"})
 		}, "/mesh/segment", map[string]any{"input": "task-mesh", "model": "v2.0-20260430", "segmentation_granularity": "detailed"}},
-		{"complete_mesh", func() *tripo.Submission {
+		{"complete_mesh", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.CompleteMesh, tripo.CompleteMeshRequest{Input: "task-seg", CompletionMode: "quick_cap", PartNames: []string{"lid"}})
 		}, "/mesh/complete", map[string]any{"input": "task-seg", "model": "v1.0-20250506", "completion_mode": "quick_cap", "part_names": []any{"lid"}}},
-		{"smart_segment", func() *tripo.Submission {
+		{"smart_segment", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.SmartSegment, tripo.SmartSegmentRequest{SegType: "image", Input: "https://example.com/a.png", Hint: "wheels and body"})
 		}, "/mesh/smartsegment", map[string]any{"seg_type": "image", "input": "https://example.com/a.png", "hint": "wheels and body"}},
-		{"rig_check", func() *tripo.Submission {
+		{"rig_check", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.RigCheck, tripo.RigCheckRequest{Input: "task-mesh"})
 		}, "/animations/rig-check", map[string]any{"input": "task-mesh"}},
-		{"rig_model", func() *tripo.Submission {
-			return submit(t, fake, tripo.RigModel, tripo.RigModelRequest{Input: "task-mesh", Model: "rig-v3.0", RigType: "others", Spec: "unreal", OutFormat: "fbx"})
-		}, "/animations/rig", map[string]any{"input": "task-mesh", "model": "v3.0-20260909", "rig_type": "others", "spec": "unreal", "out_format": "fbx"}},
-		{"retarget_animation", func() *tripo.Submission {
+		{"rig_model", func(t *testing.T) *tripo.Submission {
+			return submit(t, fake, tripo.RigModel, tripo.RigModelRequest{Input: "task-mesh", Model: "rig-v3.0", RigType: "biped", Spec: "unreal", OutFormat: "fbx"})
+		}, "/animations/rig", map[string]any{"input": "task-mesh", "model": "v3.0-20260909", "rig_type": "biped", "spec": "unreal", "out_format": "fbx"}},
+		{"retarget_animation", func(t *testing.T) *tripo.Submission {
 			return submit(t, fake, tripo.RetargetAnimation, tripo.RetargetAnimationRequest{Input: "task-rig", Animations: []string{"preset:walk", "preset:run"}, AnimateInPlace: ptr(true)})
 		}, "/animations/retarget", map[string]any{"input": "task-rig", "animations": []any{"preset:walk", "preset:run"}, "animate_in_place": true}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.run()
+			tc.run(t)
 			assertBody(t, fake.Last(t, tc.path).Body, tc.want)
 		})
 	}
@@ -228,6 +228,55 @@ func TestSubmit_RejectsInvalidRequestsLocally(t *testing.T) {
 			_, err := tripo.EditMultiview.Submit(ctx, c, tripo.EditMultiviewRequest{Input: "task-mv", Prompts: []tripo.MultiviewEdit{}})
 			return err
 		},
+		"edit_multiview with a blank prompt": func() error {
+			_, err := tripo.EditMultiview.Submit(ctx, c, tripo.EditMultiviewRequest{Input: "task-mv", Prompts: []tripo.MultiviewEdit{{View: "back", Prompt: " "}}})
+			return err
+		},
+		"generate_parts with smart_low_poly": func() error {
+			_, err := tripo.TextToModel.Submit(ctx, c, tripo.TextToModelRequest{Prompt: "x", GenerationOptions: tripo.GenerationOptions{
+				GenerateParts: ptr(true), Texture: ptr(false), PBR: ptr(false), SmartLowPoly: ptr(true)}})
+			return err
+		},
+		"texture_prompt with no guidance": func() error {
+			_, err := tripo.TextureModel.Submit(ctx, c, tripo.TextureModelRequest{Input: "task-a", TexturePrompt: &tripo.TexturePrompt{}})
+			return err
+		},
+		"texture_prompt style_image without text": func() error {
+			_, err := tripo.TextureModel.Submit(ctx, c, tripo.TextureModelRequest{Input: "task-a", TexturePrompt: &tripo.TexturePrompt{Image: "https://x/a.png", StyleImage: "https://x/s.png"}})
+			return err
+		},
+		"texture_prompt with three views": func() error {
+			_, err := tripo.TextureModel.Submit(ctx, c, tripo.TextureModelRequest{Input: "task-a", TexturePrompt: &tripo.TexturePrompt{Images: []tripo.Input{"a", "b", "c"}}})
+			return err
+		},
+		"quad conversion to OBJ": func() error {
+			_, err := tripo.ConvertModel.Submit(ctx, c, tripo.ConvertModelRequest{Input: "task-mesh", Format: "OBJ", Quad: ptr(true)})
+			return err
+		},
+		"five seedream references": func() error {
+			_, err := tripo.ImageToImage.Submit(ctx, c, tripo.ImageToImageRequest{Inputs: []tripo.Input{"a", "b", "c", "d", "e"}, Prompt: "x"})
+			return err
+		},
+		"quality on seedream": func() error {
+			_, err := tripo.TextToImage.Submit(ctx, c, tripo.TextToImageRequest{Prompt: "x", ImageOptions: tripo.ImageOptions{Quality: "high"}})
+			return err
+		},
+		"xhigh on chat_image_2": func() error {
+			_, err := tripo.TextToImage.Submit(ctx, c, tripo.TextToImageRequest{Prompt: "x", ImageOptions: tripo.ImageOptions{Model: "chat_image_2", Quality: "xhigh"}})
+			return err
+		},
+		"aspect_ratio on seedream": func() error {
+			_, err := tripo.TextToImage.Submit(ctx, c, tripo.TextToImageRequest{Prompt: "x", ImageOptions: tripo.ImageOptions{AspectRatio: "16:9"}})
+			return err
+		},
+		"watermark on banana": func() error {
+			_, err := tripo.TextToImage.Submit(ctx, c, tripo.TextToImageRequest{Prompt: "x", Watermark: ptr(true), ImageOptions: tripo.ImageOptions{Model: "banana"}})
+			return err
+		},
+		"spec on a quadruped rig": func() error {
+			_, err := tripo.RigModel.Submit(ctx, c, tripo.RigModelRequest{Input: "task-mesh", Model: "v2.5", RigType: "quadruped", Spec: "mixamo"})
+			return err
+		},
 	}
 	for name, run := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -298,6 +347,31 @@ func TestSubmit_RefusesBadLocalInputs(t *testing.T) {
 	}
 	if reqs := fake.Requests(); len(reqs) != 0 {
 		t.Fatalf("requests reached Tripo: %v", reqs)
+	}
+}
+
+func TestUploadFile_RoutesByFormat(t *testing.T) {
+	fake := tripotest.New(t)
+	c := fake.Client(t)
+	for _, name := range []string{"ref.webp", "mesh.3mf", "scene.usdz"} {
+		if _, err := c.UploadFile(context.Background(), writeFile(t, name, 64)); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	if _, err := c.UploadFile(context.Background(), writeFile(t, "mesh.glb", 64)); err != nil {
+		t.Fatal(err)
+	}
+	var presigned, multipart int
+	for _, r := range fake.Requests() {
+		switch r.Path {
+		case "/files/presign":
+			presigned++
+		case "/files":
+			multipart++
+		}
+	}
+	if presigned != 3 || multipart != 1 {
+		t.Fatalf("presigned %d, multipart %d; want webp/3mf/usdz presigned and glb multipart", presigned, multipart)
 	}
 }
 

@@ -113,9 +113,9 @@ var catalog = []ModelVersion{
 		DefaultFor:  []string{"rig_model"},
 		Description: "Biped rigs only, with 90+ preset:biped:* animations."},
 	{ID: "v2.5-20260210", Name: "Rig v2.5", Family: "rig", Aliases: []string{"v2.5", "rig-v2.5", "rig-v2.0"},
-		Description: "All creature types (quadruped, hexapod, avian, ...); no humanoid presets."},
+		Description: "All creature types (quadruped, hexapod, avian, ...); supports the unity/unreal/vrm specs; no humanoid presets."},
 	{ID: "v3.0-20260909", Name: "Rig v3.0", Family: "rig", Aliases: []string{"v3.0", "rig-v3.0"},
-		Description: "Best humanoid rigs; adds rig_type others and the unity/unreal/vrm/actorcore specs."},
+		Description: "Best humanoid rigs; adds rig_type others."},
 }
 
 func init() {

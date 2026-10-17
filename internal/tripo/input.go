@@ -35,6 +35,13 @@ var uploadKinds = map[string]string{
 	"stl": uploadKindModel, "3mf": uploadKindModel, "usdz": uploadKindModel,
 }
 
+// multipartFormats are the types POST /files accepts; the others (webp, 3mf,
+// usdz) only upload through a presigned URL.
+var multipartFormats = map[string]bool{
+	"png": true, "jpg": true, "jpeg": true,
+	"glb": true, "gltf": true, "fbx": true, "obj": true, "stl": true,
+}
+
 func isHTTPURL(s string) bool {
 	return strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://")
 }
@@ -119,7 +126,8 @@ type Upload struct {
 
 // UploadFile uploads a local image (PNG, JPEG, WebP; up to 20 MB) or model
 // (GLB, GLTF, FBX, OBJ, STL, 3MF, USDZ; up to 150 MB) and returns its file
-// token. Files over 50 MB go through a presigned upload.
+// token. Files over 50 MB, and WebP, 3MF and USDZ files, go through a
+// presigned upload.
 func (c *Client) UploadFile(ctx context.Context, path string) (*Upload, error) {
 	path, err := filepath.Abs(path)
 	if err != nil {
@@ -144,7 +152,7 @@ func (c *Client) UploadFile(ctx context.Context, path string) (*Upload, error) {
 	}
 
 	var token string
-	if info.Size() > presignAbove {
+	if info.Size() > presignAbove || !multipartFormats[ext] {
 		token, err = c.presignedUpload(ctx, path, ext)
 	} else {
 		token, err = c.multipartUpload(ctx, path)

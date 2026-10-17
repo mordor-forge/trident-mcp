@@ -135,6 +135,7 @@ func TestDownload_SavesEveryOutput(t *testing.T) {
 		"model_url":          fake.AddFile("pbr_model.glb", "model/gltf-binary", []byte("glTF")),
 		"rendered_image_url": fake.AddFile("preview", "image/webp", []byte("RIFF")),
 		"splat_url":          fake.AddFile("scene.splat", "application/octet-stream", []byte("SPLAT")),
+		"print_url":          fake.AddFile("download", "application/octet-stream", []byte("3MF")) + "?filename=part.3mf",
 	})
 	dir := t.TempDir()
 
@@ -142,10 +143,10 @@ func TestDownload_SavesEveryOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if task.TaskID != "d" || len(artifacts) != 3 {
+	if task.TaskID != "d" || len(artifacts) != 4 {
 		t.Fatalf("artifacts = %+v", artifacts)
 	}
-	want := map[string]string{"model": "glb", "rendered_image": "webp", "splat": "splat"}
+	want := map[string]string{"model": "glb", "rendered_image": "webp", "splat": "splat", "print": "3mf"}
 	for _, a := range artifacts {
 		if want[a.Name] != a.Format || a.Path != filepath.Join(dir, "d", a.Name+"."+a.Format) {
 			t.Errorf("artifact %+v", a)

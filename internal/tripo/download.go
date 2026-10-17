@@ -144,11 +144,14 @@ var contentTypeFormats = map[string]string{
 	"application/x-splat": "splat",
 }
 
-// artifactFormat infers a file extension from the URL path, then the
-// Content-Disposition filename, then the Content-Type.
+// artifactFormat infers a file extension from the URL path, its filename
+// query parameter, the Content-Disposition filename, then the Content-Type.
 func artifactFormat(rawURL string, header http.Header) string {
 	if u, err := neturl.Parse(rawURL); err == nil {
 		if ext := extOf(u.Path); knownFormats[ext] {
+			return ext
+		}
+		if ext := extOf(u.Query().Get("filename")); knownFormats[ext] {
 			return ext
 		}
 	}
