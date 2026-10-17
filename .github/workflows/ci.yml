@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  unit:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
@@ -98,11 +98,26 @@ jobs:
       - name: zizmor (Actions security audit)
         run: pipx run zizmor==1.31.1 --format=github .
 
+  # The one required status check: passes only when every job above passed,
+  # so branch rules need not list each matrix entry.
+  test:
+    runs-on: ubuntu-latest
+    needs: [unit, lint, plugin, workflows]
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: All CI jobs passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done
+
   # Free live calls only (balance, usage, upload, task lookup): catches auth,
   # envelope and endpoint drift on main without spending credits.
   e2e:
     runs-on: ubuntu-latest
-    needs: test
+    needs: unit
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 10
     steps:
