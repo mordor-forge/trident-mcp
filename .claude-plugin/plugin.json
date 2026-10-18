@@ -1,7 +1,7 @@
 {
   "name": "trident",
   "displayName": "Trident (Tripo 3D)",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Unofficial Tripo 3D API plugin. Generate, texture, retopologize, rig, animate and convert 3D models: text/image/multiview to 3D, P1/P2 low-poly, Smart UV, segmentation, Gaussian splats, with a workflow skill that prices plans before spending credits.",
   "author": {
     "name": "mordor-forge",

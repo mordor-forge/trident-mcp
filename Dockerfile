@@ -7,7 +7,7 @@
 # Artifacts are written to /output/<task_id>/. --user makes files in the
 # bind-mounted directory belong to you. Local-path inputs must be mounted too.
 #
-# Build: docker build --build-arg VERSION=0.2.0 -t trident-mcp .
+# Build: docker build --build-arg VERSION=0.4.0 -t trident-mcp .
 
 # Cross-compile on the build machine's architecture: no emulation for multi-arch builds.
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build

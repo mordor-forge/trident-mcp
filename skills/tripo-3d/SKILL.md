@@ -5,7 +5,7 @@ license: Apache-2.0
 compatibility: Requires the trident MCP server (https://github.com/mordor-forge/trident-mcp) with a Tripo API key.
 metadata:
   author: mordor-forge
-  version: "0.2.0"
+  version: "0.4.0"
   mcp-server: trident
 ---
 

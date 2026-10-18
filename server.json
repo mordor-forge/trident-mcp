@@ -3,7 +3,7 @@
   "name": "io.github.mordor-forge/trident-mcp",
   "title": "Trident (Tripo 3D)",
   "description": "Unofficial MCP server for the Tripo 3D API: text/image to 3D, texturing, rigging, conversion",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "websiteUrl": "https://github.com/mordor-forge/trident-mcp",
   "repository": {
     "url": "https://github.com/mordor-forge/trident-mcp",
@@ -12,7 +12,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/mordor-forge/trident-mcp:0.2.0",
+      "identifier": "ghcr.io/mordor-forge/trident-mcp:0.4.0",
       "runtimeHint": "docker",
       "transport": {
         "type": "stdio"
