@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by 0004
 date: 2026-07-08
 applies_to: trident-mcp
 ---

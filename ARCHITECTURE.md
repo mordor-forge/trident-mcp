@@ -1,147 +1,85 @@
 # Architecture
 
-`trident-mcp` is a small Go MCP server with a clear split between three layers:
-
-1. the process entrypoint and config loader
-2. the MCP server that exposes tools
-3. the provider implementation that speaks to Tripo
-
-The current codebase is intentionally small, but it already follows a ports-and-adapters shape that keeps the server layer mostly independent from the Tripo-specific HTTP adapter.
+trident-mcp is a Go MCP server for the Tripo 3D API. All Tripo knowledge lives in one module, `internal/tripo`. The MCP server is a thin generic layer on top of it (ADR-0004).
 
 Related documentation:
 
-- [Provider boundary design](docs/design/provider-boundaries.md)
+- [Tripo module design](docs/design/tripo-module.md): invariants and update rules
 - [MCP tool reference](docs/MCP_TOOLS.md)
+- [Glossary](GLOSSARY.md)
 - [Architecture decision records](docs/adr/)
 - [Threat model](THREAT_MODEL.md)
 
-## Runtime Layering
+## Layout
 
 ```mermaid
 flowchart TD
-    mainEntry["cmd/trident-mcp/main.go"] --> configLoad["internal/config.Load"]
-    mainEntry --> tripoProvider["internal/provider/tripo.NewFromConfig"]
-    mainEntry --> serverLayer["internal/server.NewWithOptions"]
-
-    mcpClient["MCP client"] -->|"stdio"| serverLayer
-    serverLayer -->|"Provider capability interfaces"| tripoProvider
-    tripoProvider -->|"POST /generation/*, /models/*, /mesh/*, /animations/*; GET /tasks/{id}; POST /files"| tripoApi["Tripo v3 API"]
-    tripoProvider --> outputDir["MODEL_OUTPUT_DIR"]
+    main["cmd/trident-mcp/main.go<br/>composition root"] --> config["internal/config<br/>env → Config"]
+    main --> client["internal/tripo.Client"]
+    main --> server["internal/server"]
+    mcpClient["MCP client"] -->|stdio| server
+    server -->|"addOperation(op) per Operation<br/>+ task, account tools"| client
+    client -->|"HTTPS (the only seam)"| tripoAPI["Tripo v3 API"]
+    client --> outputDir["MODEL_OUTPUT_DIR/&lt;task_id&gt;/"]
+    tests["tests"] -->|same seam| fake["tripotest fake API"]
 ```
 
-## Async Task Lifecycle
+| Path | Role |
+| --- | --- |
+| `cmd/trident-mcp/main.go` | Loads config, builds `tripo.Client`, builds and runs the server. |
+| `internal/config` | Reads `TRIPO_API_KEY` (or the plugin's `TRIDENT_TRIPO_API_KEY`), `TRIPO_BASE_URL` and `MODEL_OUTPUT_DIR`. |
+| `internal/tripo` | The Tripo module. See below. |
+| `internal/tripo/tripotest` | An in-memory fake of the Tripo API: the second adapter behind the HTTP seam. |
+| `internal/server` | MCP tools. Each Operation becomes a tool through one generic `addOperation`. Also the task, account and config tools. |
+| `skills/` | Agent skills shipped with the Claude Code plugin. |
+
+## The tripo module
+
+| File | Owns |
+| --- | --- |
+| `client.go` | `Client`, the authenticated transport, the `{code, data}` envelope, `*tripo.Error` (code, message, suggestion, request ID), 429 retries |
+| `operation.go` | `Operation[R]`: encode, validate, resolve the model version, upload Inputs, POST; schema generation from struct tags |
+| `operations.go` | Every Operation and its request type: the full v3 task-creating surface |
+| `catalog.go` | Model versions: aliases, per-Operation defaults, fields each version rejects |
+| `input.go` | `Input` resolution (local path → upload → file token), multipart and presigned uploads |
+| `task.go` | `Task`, `Status`, Output accessors, `GetTask`, `GetTasks`, `WaitTask` |
+| `download.go` | `Download`: Outputs → Artifacts on disk, with format detection |
+| `account.go` | Balance and usage |
+
+### How one operation call flows
 
 ```mermaid
-flowchart LR
-    toolCall["MCP tool call"] --> submit["Provider submits async task"]
-    submit --> taskId["task_id returned"]
-    taskId --> poll["task_status"]
-    poll -->|"queued or running"| taskId
-    poll -->|"success"| nextStep["download_model or follow-up post-process"]
-    poll -->|"failed, cancelled, expired"| surfaceError["Return status and error"]
-    nextStep -->|"retopologize / convert_format / stylize / texture / rig / retarget"| submit
-    nextStep -->|"download_model"| savedFile["Model written to MODEL_OUTPUT_DIR"]
+sequenceDiagram
+    participant A as Agent
+    participant S as server.addOperation
+    participant O as tripo.Operation.Submit
+    participant T as Tripo
+    A->>S: text_to_model {prompt, model: "p1", quad: false}
+    Note over S: MCP SDK validates args against op.InputSchema()
+    S->>O: Submit(ctx, client, TextToModelRequest)
+    Note over O: validate schema + cross-field checks<br/>model alias → P1-20260311<br/>P1 rejects quad → unset, so dropped
+    O->>T: POST /files (only for local-path Inputs)
+    O->>T: POST /generation/text-to-model
+    T-->>O: {task_id}
+    O-->>S: Submission{task_id, model, produces, warnings}
+    S-->>A: "Started … Next: wait_for_task"
+    A->>S: wait_for_task {task_id}
+    S->>T: GET /tasks/{id} every 2 s (progress notifications)
+    S->>T: GET signed output URLs → <dir>/<task_id>/model.glb
 ```
 
-## File Layout
+## Design choices
 
-### Entrypoint and config
+- **One adapter, so no Go-interface seam** (ADR-0004). The server depends on `*tripo.Client`. Tests swap the HTTP transport (`tripotest`), not Go types, so one test covers argument decoding, payload encoding and output parsing together.
+- **Arguments mirror Tripo's field names** (ADR-0005). A request struct's `json` tags are the MCP schema and the Tripo payload at once, `enum` tags feed the schema and validation, and `catalog` tags resolve version fields. Adding a Tripo parameter means adding one field.
+- **The catalog is static** (ADR-0002). It never calls Tripo for discovery. Unknown versions still go through with a warning, so new Tripo models work before the catalog is updated.
+- **Tasks are asynchronous** (ADR-0003). Create tools never block. `wait_for_task` is the opt-in blocking step and saves the outputs while their signed URLs are still valid.
+- **Outputs are kept verbatim.** `Task.Output` is Tripo's map. Every `*_url` field, including nested ones, becomes a downloadable Artifact, so new output types need no code.
 
-- [`cmd/trident-mcp/main.go`](cmd/trident-mcp/main.go) is the composition root. It loads config, constructs the Tripo provider, and injects that provider into the MCP server.
-- [`internal/config/config.go`](internal/config/config.go) reads `TRIPO_API_KEY`, optional `TRIPO_BASE_URL`, and `MODEL_OUTPUT_DIR`, creates the output directory if needed, and reports the active backend metadata used by `get_config`.
+## Testing
 
-### Provider boundary
-
-- [`internal/provider/interfaces.go`](internal/provider/interfaces.go) defines capability interfaces:
-  - `ModelGenerator`
-  - `ImageGenerator`
-  - `ModelStatus`
-  - `ModelPostProcessor`
-  - `ModelProcessor`
-  - `MeshProcessor`
-  - `Animator`
-  - `CommonAPI`
-  - `ModelLister`
-- [`internal/provider/types.go`](internal/provider/types.go) holds the shared request and response types used by both the MCP handlers and the provider implementation.
-
-This is the main architectural seam in the project. The server layer depends on these interfaces rather than on a concrete Tripo type.
-
-### MCP server
-
-- [`internal/server/server.go`](internal/server/server.go) creates the MCP server and conditionally registers tools based on which provider interfaces are non-nil.
-- [`internal/server/tools_generation.go`](internal/server/tools_generation.go) exposes generation, status, download, batch task, account, and file upload tools.
-- [`internal/server/tools_image.go`](internal/server/tools_image.go) exposes Tripo v3 image-generation tools.
-- [`internal/server/tools_postprocess.go`](internal/server/tools_postprocess.go) exposes retopology, format conversion, and stylization tools.
-- [`internal/server/tools_v3_processing.go`](internal/server/tools_v3_processing.go) exposes model processing, mesh processing, rigging, and animation tools.
-- [`internal/server/tools_config.go`](internal/server/tools_config.go) exposes `list_models` and `get_config`.
-
-Conditional registration is important:
-
-- generation tools are only registered when both `ModelGenerator` and `ModelStatus` are present
-- post-process tools are only registered when both `ModelPostProcessor` and `ModelStatus` are present
-- v3 image, model, mesh, and animation tools are registered only when their capability interfaces are implemented
-- `list_models` is only registered when `ModelLister` is present
-- `get_config` is always available
-
-That keeps the published MCP surface aligned with what the backend can actually complete.
-
-### Tripo adapter
-
-The Tripo implementation is intentionally split by concern:
-
-- [`internal/provider/tripo/provider.go`](internal/provider/tripo/provider.go) contains provider construction, shared HTTP helpers, task creation, and upload handling.
-- [`internal/provider/tripo/generation.go`](internal/provider/tripo/generation.go) maps MCP generation requests to Tripo task payloads.
-- [`internal/provider/tripo/v3_features.go`](internal/provider/tripo/v3_features.go) maps newer v3 image, model, mesh, animation, batch task, and presigned upload APIs.
-- [`internal/provider/tripo/status.go`](internal/provider/tripo/status.go) polls task state and downloads completed artifacts.
-- [`internal/provider/tripo/postprocess.go`](internal/provider/tripo/postprocess.go) handles retopology, format conversion, and stylization tasks.
-- [`internal/provider/tripo/models.go`](internal/provider/tripo/models.go) defines the server's built-in compatibility catalog and friendly model-version aliases.
-- [`internal/provider/tripo/helpers.go`](internal/provider/tripo/helpers.go) provides filename generation, file-type detection, format inference, and download helpers.
-
-## Design Choices
-
-### Why `list_models` is static
-
-`list_models` is backed by the catalog in [`internal/provider/tripo/models.go`](internal/provider/tripo/models.go), not by a live Tripo endpoint. That is intentional:
-
-- the MCP surface stays deterministic
-- tests do not need live network discovery
-- aliases like `v3.1`, `turbo`, and `p1` can be normalized consistently
-- endpoint-specific namespaces can be listed without mixing 3D, image, and animation model IDs
-
-The trade-off is that the catalog must be refreshed when Tripo updates its public model matrix.
-
-### Why everything is task-oriented
-
-Tripo is primarily an async task API, so the codebase is built around that assumption:
-
-- generation, image, model-processing, mesh, and animation tools create tasks
-- `task_status` polls those tasks
-- `get_tasks` batch-queries task state when callers need several IDs at once
-- `get_balance` and `get_usage` expose account credit balance and per-task usage history
-- `upload_file` and `create_file_upload` expose Tripo file-token setup for local and presigned uploads
-- `download_model` saves the resulting artifact locally
-
-That model keeps the MCP interface simple, but it also means the current abstraction is optimized for task-based providers rather than synchronous or streaming backends.
-
-## Extension Boundaries
-
-The provider interfaces are a good foundation for additional backends, but the system is not yet fully backend-agnostic end-to-end.
-
-Today:
-
-- the server layer is provider-oriented and reusable
-- the config loader assumes Tripo credentials
-- the entrypoint always constructs the Tripo provider directly
-
-So adding another backend would mostly involve implementing the interfaces, but it would also require wiring changes in:
-
-- [`internal/config/config.go`](internal/config/config.go)
-- [`cmd/trident-mcp/main.go`](cmd/trident-mcp/main.go)
-
-## Testing Strategy
-
-- [`internal/provider/tripo/*_test.go`](internal/provider/tripo) uses `httptest` to validate request mapping and response handling without calling the live API.
-- [`internal/server/server_test.go`](internal/server/server_test.go) exercises the MCP layer with an in-memory client/server pair.
-- [`internal/provider/tripo/e2e_test.go`](internal/provider/tripo/e2e_test.go) is opt-in because it hits the live Tripo API. The default e2e path checks balance/usage and uploads a tiny file; `TRIPO_E2E_GENERATE=1` and `TRIPO_E2E_FULL=1` enable credit-spending generation checks after balance gating.
-
-In practice, most changes should be validated with unit tests first, and E2E should be reserved for cases where mock coverage is not enough.
+| Layer | Through | Covers |
+| --- | --- | --- |
+| `internal/tripo` | public API against `tripotest` | payload per Operation, catalog rules, local validation, uploads, task decoding, waiting, downloads, error envelopes, retries |
+| `internal/server` | in-memory MCP client → real `tripo.Client` → `tripotest` | the tool list, every Operation tool end to end, schema rejection, `wait_for_task` progress and downloads, docs coverage of every tool |
+| `internal/tripo/e2e_test.go` | the live API (`-tags=e2e`) | free calls by default; `TRIPO_E2E_SPEND=1` runs a balance-gated lifecycle of about 80 credits |

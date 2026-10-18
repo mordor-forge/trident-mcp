@@ -1,24 +1,49 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+#
+# Release pipeline (see .github/workflows/release.yml). Local dry run:
+#   goreleaser release --snapshot --clean
 version: 2
+
 project_name: trident-mcp
 
 builds:
-  - main: ./cmd/trident-mcp
+  - id: trident-mcp
+    main: ./cmd/trident-mcp
     binary: trident-mcp
     env:
       - CGO_ENABLED=0
-    goos: [linux, darwin, windows]
-    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
     ldflags:
       - -s -w -X main.version={{ .Version }}
+    # Reproducible builds: file times come from the commit, not the build machine.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
 archives:
+  # The binary plus the plugin manifest and skills, so an extracted archive is
+  # also a complete Claude Code plugin directory (claude --plugin-dir <dir>).
   - formats: [tar.gz]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
         formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - .claude-plugin/plugin.json
+      - skills/**/*
+
 checksum:
   name_template: checksums.txt
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
+
 changelog:
   sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"

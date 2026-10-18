@@ -1,92 +1,85 @@
 # trident-mcp
 
-[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![trident-mcp MCP server](https://glama.ai/mcp/servers/mordor-forge/trident-mcp/badges/score.svg)](https://glama.ai/mcp/servers/mordor-forge/trident-mcp)
 
-`trident-mcp` is a Go MCP server for AI-assisted 3D model generation and post-processing. It runs as a single stdio binary and currently uses the Tripo v3 API behind provider capability interfaces.
+An unofficial MCP server for the [Tripo 3D](https://www.tripo3d.ai) API that covers every documented, deployed v3 workflow. A few endpoints are deliberately left out; they are listed in [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md#not-exposed). Agents can:
+
+- generate meshes from text, one image or several views;
+- make reference images and multiview sets;
+- texture, retopologize, UV-unwrap, segment, rig, animate and convert meshes;
+- produce Gaussian splats.
+
+The outputs land as files on disk. It ships as one Go binary over stdio, plus a Claude Code plugin with a workflow skill.
 
 ![Potion bottle generated with the Tripo v3 multiview pipeline](docs/assets/potion-bottle-collage.png)
 
-[![trident-mcp MCP server](https://glama.ai/mcp/servers/mordor-forge/trident-mcp/badges/card.svg)](https://glama.ai/mcp/servers/mordor-forge/trident-mcp)
+## Quick start
 
-## Quick Start
-
-Build locally:
+**Claude Code.** Put the binary on your `PATH`, then install the plugin:
 
 ```bash
-go build -o ./trident-mcp ./cmd/trident-mcp
+go install github.com/mordor-forge/trident-mcp/cmd/trident-mcp@latest   # or grab a release archive
 ```
 
-Run with a Tripo key:
-
-```bash
-TRIPO_API_KEY=tsk_your_key_here ./trident-mcp
+```text
+/plugin marketplace add mordor-forge/claude-plugins
+/plugin install trident@mordor-forge
 ```
 
-One-command development bootstrap and smoke check:
+The plugin asks for your Tripo key and output folder, and adds the `tripo-3d` skill. Then ask for what you want, e.g. *"make a game-ready low-poly treasure chest and export it as FBX"*.
 
-```bash
-go mod download && go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.11.4 && go test ./... -count=1
-```
-
-## MCP Client Config
+**Any MCP client:**
 
 ```json
 {
   "mcpServers": {
-    "trident-mcp": {
+    "trident": {
       "command": "trident-mcp",
-      "env": {
-        "TRIPO_API_KEY": "tsk_your_key_here",
-        "MODEL_OUTPUT_DIR": "/absolute/path/to/generated_models"
-      }
+      "env": { "TRIPO_API_KEY": "tsk_...", "MODEL_OUTPUT_DIR": "/abs/path/generated_models" }
     }
   }
 }
 ```
 
-## Documentation Map
+## How it works
 
-| Need | Read |
-| --- | --- |
-| Agent instructions and common change patterns | [AGENTS.md](AGENTS.md) |
-| Architecture, module boundaries, and Mermaid diagrams | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| MCP tool surface, models, and Tripo v3 behavior notes | [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) |
-| Local setup, verification commands, and release workflow | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) |
-| Runtime config, E2E tests, and operational caveats | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
-| Design invariants and provider-boundary rationale | [docs/design/provider-boundaries.md](docs/design/provider-boundaries.md) |
-| Architecture decision records | [docs/adr/](docs/adr/) |
-| Security policy and threat model | [SECURITY.md](SECURITY.md), [THREAT_MODEL.md](THREAT_MODEL.md) |
+1. A task-creating tool (`text_to_model`, `rig_model`, `convert_model`, …) validates its arguments locally, uploads any local files, and returns a `task_id`.
+2. `wait_for_task` waits with progress notifications, then saves the outputs to `<output dir>/<task_id>/`. For example: `model.glb`, `rendered_image.webp`, `generated_image.png`, `front_view.png`.
+3. Pass a `task_id` as the next tool's `input` to chain steps: image → mesh → rig → animation → FBX.
+
+Arguments use Tripo's own field names, so [Tripo's docs](https://developers.tripo3d.ai) apply to them directly. A few convenience fields differ from Tripo's wire format, such as multiview `inputs` given as a `{front, left, back, right}` map. See [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) for all 28 tools.
 
 ## Configuration
 
-| Variable | Required | Default | Description |
-| --- | --- | --- | --- |
-| `TRIPO_API_KEY` | Yes | none | Tripo API key used for generation, polling, download, and post-processing calls |
-| `TRIPO_BASE_URL` | No | `https://openapi.tripo3d.ai/v3` | Override for private deployments or tests |
-| `MODEL_OUTPUT_DIR` | No | `~/generated_models` | Directory where downloaded models are written |
+| Variable | Default | |
+| --- | --- | --- |
+| `TRIPO_API_KEY` | required | From <https://platform.tripo3d.ai> |
+| `MODEL_OUTPUT_DIR` | `~/generated_models` | Created if missing |
+| `TRIPO_BASE_URL` | `https://openapi.tripo3d.ai/v3` | China-region keys: `https://openapi.tripo3d.com/v3` |
 
-## Tool Overview
+## Documentation
 
-The server exposes tools for text/image/multiview 3D generation, image preparation, splats, async task polling, account balance and usage, file uploads, downloads, conversion, retopology, stylization, texture/refine/segment/complete workflows, rig checks, rigging, animation retargeting, and model/config inspection.
+| Need | Read |
+| --- | --- |
+| Every tool, argument and behaviour | [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) |
+| Architecture and the `internal/tripo` module | [ARCHITECTURE.md](ARCHITECTURE.md), [docs/design/tripo-module.md](docs/design/tripo-module.md) |
+| Domain vocabulary | [GLOSSARY.md](GLOSSARY.md) |
+| Contributing, change recipes | [AGENTS.md](AGENTS.md), [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), [docs/patterns/common-changes.md](docs/patterns/common-changes.md) |
+| Running, live tests, failure handling | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
+| Decisions | [docs/adr/](docs/adr/) |
+| Security | [SECURITY.md](SECURITY.md), [THREAT_MODEL.md](THREAT_MODEL.md) |
 
-See [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) for the full tool contract and known Tripo v3 quirks.
+## Tripo terms and trademarks
 
-## Development
+trident-mcp is an independent project. It is not affiliated with or endorsed by Tripo, VAST or Holymolly Ltd, and "Tripo" is a trademark of its owner. Your use of the Tripo API is governed by [Tripo's terms](https://www.tripo3d.ai/terms). Under them:
 
-The normal local gate is:
+- Use your own API key, and keep it private.
+- Tripo's written authorization is required before offering a shared or hosted deployment to other people.
+- Ownership of generated models depends on your Tripo plan.
 
-```bash
-go build ./cmd/trident-mcp
-go test ./... -count=1
-go vet ./...
-golangci-lint run
-go run golang.org/x/vuln/cmd/govulncheck@latest ./...
-```
-
-Live E2E tests require `TRIPO_API_KEY` and can spend credits when opt-in generation flags are set. See [docs/OPERATIONS.md](docs/OPERATIONS.md#live-e2e-tests).
+Credit prices quoted in the docs and skill are dated summaries; [Tripo's pricing page](https://developers.tripo3d.ai/en/pricing) is authoritative.
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE). The license covers this repository's code, not Tripo's service or the models you generate.

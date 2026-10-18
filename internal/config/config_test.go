@@ -7,94 +7,66 @@ import (
 	"testing"
 )
 
-func TestLoad_TripoAPIKey(t *testing.T) {
-	t.Setenv("TRIPO_API_KEY", "tsk_test-key")
-	t.Setenv("TRIPO_BASE_URL", "https://tripo.internal/v3")
-	t.Setenv("MODEL_OUTPUT_DIR", t.TempDir())
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.Provider.APIKey != "tsk_test-key" {
-		t.Errorf("APIKey = %q, want %q", cfg.Provider.APIKey, "tsk_test-key")
-	}
-	if cfg.Provider.BaseURL != "https://tripo.internal/v3" {
-		t.Errorf("BaseURL = %q, want custom base URL", cfg.Provider.BaseURL)
-	}
-	if cfg.Backend() != BackendTripo {
-		t.Errorf("Backend() = %q, want %q", cfg.Backend(), BackendTripo)
+func clearEnv(t *testing.T) {
+	for _, key := range []string{"TRIDENT_TRIPO_API_KEY", "TRIPO_API_KEY", "TRIPO_BASE_URL", "MODEL_OUTPUT_DIR"} {
+		t.Setenv(key, "")
 	}
 }
 
-func TestLoad_NoCredentials(t *testing.T) {
-	t.Setenv("TRIPO_API_KEY", "")
-	t.Setenv("MODEL_OUTPUT_DIR", t.TempDir())
-
-	_, err := Load()
-	if err == nil {
-		t.Fatal("expected error for missing credentials, got nil")
-	}
-	if !strings.Contains(err.Error(), "TRIPO_API_KEY") {
-		t.Fatalf("error %q does not mention TRIPO_API_KEY", err)
-	}
-}
-
-func TestConfigBackend_NilConfig(t *testing.T) {
-	var cfg *Config
-	if cfg.Backend() != BackendUnknown {
-		t.Fatalf("Backend() = %q, want %q", cfg.Backend(), BackendUnknown)
-	}
-}
-
-func TestLoad_DefaultOutputDir(t *testing.T) {
-	t.Setenv("TRIPO_API_KEY", "tsk_test-key")
-	t.Setenv("MODEL_OUTPUT_DIR", "")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	homeDir, _ := os.UserHomeDir()
-	expected := filepath.Join(homeDir, "generated_models")
-	if cfg.OutputDir != expected {
-		t.Errorf("OutputDir = %q, want %q", cfg.OutputDir, expected)
-	}
-}
-
-func TestLoad_CustomOutputDir(t *testing.T) {
+func TestLoad_ReadsEnvironment(t *testing.T) {
+	clearEnv(t)
 	dir := t.TempDir()
-	t.Setenv("TRIPO_API_KEY", "tsk_test-key")
+	t.Setenv("TRIPO_API_KEY", "tsk_env")
+	t.Setenv("TRIPO_BASE_URL", "https://openapi.tripo3d.com/v3")
 	t.Setenv("MODEL_OUTPUT_DIR", dir)
 
 	cfg, err := Load()
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatal(err)
 	}
-	if cfg.OutputDir != dir {
-		t.Errorf("OutputDir = %q, want %q", cfg.OutputDir, dir)
+	if cfg.APIKey != "tsk_env" || cfg.BaseURL != "https://openapi.tripo3d.com/v3" || cfg.OutputDir != dir {
+		t.Fatalf("cfg = %+v", cfg)
 	}
 }
 
-func TestLoad_CreatesOutputDir(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "nested", "output")
-	t.Setenv("TRIPO_API_KEY", "tsk_test-key")
-	t.Setenv("MODEL_OUTPUT_DIR", dir)
+func TestLoad_PluginKeyWins(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("TRIPO_API_KEY", "tsk_env")
+	t.Setenv("TRIDENT_TRIPO_API_KEY", "tsk_plugin")
+	t.Setenv("MODEL_OUTPUT_DIR", t.TempDir())
 
 	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err != nil || cfg.APIKey != "tsk_plugin" {
+		t.Fatalf("cfg = %+v, err = %v", cfg, err)
 	}
-	if cfg.OutputDir != dir {
-		t.Errorf("OutputDir = %q, want %q", cfg.OutputDir, dir)
+}
+
+func TestLoad_RequiresAKey(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("MODEL_OUTPUT_DIR", t.TempDir())
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "TRIPO_API_KEY") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestLoad_OutputDirDefaultsAndExpands(t *testing.T) {
+	clearEnv(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
+	t.Setenv("TRIPO_API_KEY", "tsk_env")
+
+	cfg, err := Load()
+	if err != nil || cfg.OutputDir != filepath.Join(home, "generated_models") {
+		t.Fatalf("default: cfg = %+v, err = %v", cfg, err)
 	}
 
-	info, err := os.Stat(dir)
-	if err != nil {
-		t.Fatalf("output dir not created: %v", err)
+	t.Setenv("MODEL_OUTPUT_DIR", "~/assets/3d")
+	cfg, err = Load()
+	if err != nil || cfg.OutputDir != filepath.Join(home, "assets", "3d") {
+		t.Fatalf("tilde: cfg = %+v, err = %v", cfg, err)
 	}
-	if !info.IsDir() {
-		t.Fatalf("output path is not a directory")
+	if info, err := os.Stat(cfg.OutputDir); err != nil || !info.IsDir() {
+		t.Fatalf("output dir was not created: %v", err)
 	}
 }
