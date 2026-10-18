@@ -10,7 +10,7 @@ Checks, per skill directory:
   - body under 500 lines
   - relative links in SKILL.md resolve inside the skill
   - evals/*.json files parse
-  - no references to tools removed in 0.2.0 of the server
+  - no references to tools removed in 0.4.0 of the server
 
 Dependency-free so it runs anywhere CI has Python 3.
 Usage: scripts/validate-skills.py [skills-dir]
@@ -23,7 +23,7 @@ import sys
 ALLOWED_KEYS = {"name", "description", "license", "compatibility", "metadata", "allowed-tools"}
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)#\s]+)(?:#[^)]*)?\)")
-# Tools renamed or removed in trident-mcp 0.2.0.
+# Tools renamed or removed in trident-mcp 0.4.0.
 REMOVED_TOOLS = ["text_to_3d", "image_to_3d", "multiview_to_3d", "task_status", "download_model", "convert_format", "stylize", "refine_model", "create_file_upload"]
 
 
