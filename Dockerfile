@@ -10,7 +10,7 @@
 # Build: docker build --build-arg VERSION=0.4.0 -t trident-mcp .
 
 # Cross-compile on the build machine's architecture: no emulation for multi-arch builds.
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
